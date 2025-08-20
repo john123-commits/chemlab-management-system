@@ -1,0 +1,10 @@
+{
+  "flutter.sdkPath": "path/to/your/flutter/sdk",
+  "dart.lineLength": 100,
+  "editor.rulers": [80, 100],
+  "files.associations": {
+    "*.dart": "dart"
+  },
+  "eslint.workingDirectories": ["backend"],
+  "typescript.preferences.importModuleSpecifier": "relative"
+}

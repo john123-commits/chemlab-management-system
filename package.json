@@ -1,0 +1,17 @@
+{
+  "name": "chemlab-management-system",
+  "private": true,
+  "scripts": {
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && flutter run -d windows",
+    "frontend-android": "cd frontend && flutter run -d android",
+    "install-backend": "cd backend && npm install",
+    "install-frontend": "cd frontend && flutter pub get",
+    "install-all": "npm run install-backend && npm run install-frontend",
+    "build-windows": "cd frontend && flutter build windows",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
