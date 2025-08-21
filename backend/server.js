@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
-app.use('/api/lecture-schedules', require('./routes/lectureSchedules'));
+
 
 dotenv.config();
 
@@ -25,6 +25,7 @@ app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/borrowings', require('./routes/borrowings'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/alerts', require('./routes/alerts'));
+app.use('/api/lecture-schedules', require('./routes/lectureSchedules'));
 
 // Health check
 app.get('/api/health', (req, res) => {
