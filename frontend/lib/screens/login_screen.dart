@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:chemlab_frontend/screens/register_screen.dart';
+import 'package:logger/logger.dart';
+
+var logger = Logger();
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
@@ -30,17 +32,31 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = true);
 
       try {
+        logger.d('=== LOGIN ATTEMPT ===');
+        logger.d('Email: ${_emailController.text.trim()}');
+        logger.d('Password: ${_passwordController.text}');
+
         await Provider.of<AuthProvider>(context, listen: false).login(
           _emailController.text.trim(),
           _passwordController.text,
         );
+
+        logger.d('=== LOGIN SUCCESS ===');
       } catch (error) {
+        logger.d('=== LOGIN ERROR ===');
+        logger.d('Error type: ${error.runtimeType}');
+        logger.d('Error message: $error');
+        logger.d(
+            'Stack trace: ${error is Error ? error.stackTrace : 'No stack trace'}');
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Login failed: ${error.toString()}')),
         );
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }

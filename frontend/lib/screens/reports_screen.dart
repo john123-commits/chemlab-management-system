@@ -9,8 +9,7 @@ class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _ReportsScreenState createState() => _ReportsScreenState();
+  State<ReportsScreen> createState() => _ReportsScreenState();
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
@@ -168,7 +167,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       SizedBox(
                         height: 300,
                         child: SfCircularChart(
-                          title: ChartTitle(text: 'Inventory Status'),
+                          title: const ChartTitle(text: 'Inventory Status'),
                           legend: const Legend(isVisible: true),
                           series: <CircularSeries>[
                             PieSeries<_ChartData, String>(

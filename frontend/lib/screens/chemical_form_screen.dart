@@ -10,8 +10,7 @@ class ChemicalFormScreen extends StatefulWidget {
   const ChemicalFormScreen({super.key, this.chemical});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _ChemicalFormScreenState createState() => _ChemicalFormScreenState();
+  State<ChemicalFormScreen> createState() => _ChemicalFormScreenState();
 }
 
 class _ChemicalFormScreenState extends State<ChemicalFormScreen> {

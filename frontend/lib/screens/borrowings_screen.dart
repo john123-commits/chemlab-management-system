@@ -11,8 +11,7 @@ class BorrowingsScreen extends StatefulWidget {
   const BorrowingsScreen({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _BorrowingsScreenState createState() => _BorrowingsScreenState();
+  State<BorrowingsScreen> createState() => _BorrowingsScreenState();
 }
 
 class _BorrowingsScreenState extends State<BorrowingsScreen> {

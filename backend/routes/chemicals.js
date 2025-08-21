@@ -2,7 +2,7 @@ const express = require('express');
 const Chemical = require('../models/Chemical');
 const multer = require('multer');
 const path = require('path');
-
+const { authenticateToken } = require('../middleware/auth'); // Keep only this import
 const router = express.Router();
 
 // Configure multer for file uploads
@@ -17,30 +17,13 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Middleware to verify token
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
-};
-
 // Get all chemicals
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const chemicals = await Chemical.findAll(req.query);
     res.json(chemicals);
   } catch (error) {
+    console.error('Chemical creation error:', error);
     res.status(500).json({ error: error.message });
   }
 });

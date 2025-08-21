@@ -8,8 +8,7 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _DashboardScreenState createState() => _DashboardScreenState();
+  State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
@@ -66,46 +65,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 16),
+                      // First Row - Use Flexible instead of Expanded
                       Row(
                         children: [
-                          _buildSummaryCard(
-                            'Chemicals',
-                            _reportData!['summary']['totalChemicals']
-                                .toString(),
-                            Icons.science,
-                            Colors.blue,
+                          Flexible(
+                            child: _buildSummaryCard(
+                              'Chemicals',
+                              _reportData!['summary']['totalChemicals']
+                                  .toString(),
+                              Icons.science,
+                              Colors.blue,
+                            ),
                           ),
                           const SizedBox(width: 16),
-                          _buildSummaryCard(
-                            'Equipment',
-                            _reportData!['summary']['totalEquipment']
-                                .toString(),
-                            Icons.build,
-                            Colors.green,
+                          Flexible(
+                            child: _buildSummaryCard(
+                              'Equipment',
+                              _reportData!['summary']['totalEquipment']
+                                  .toString(),
+                              Icons.build,
+                              Colors.green,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
+                      // Second Row
                       Row(
                         children: [
-                          _buildSummaryCard(
-                            'Active',
-                            _reportData!['summary']['activeBorrowings']
-                                .toString(),
-                            Icons.check_circle,
-                            Colors.orange,
+                          Flexible(
+                            child: _buildSummaryCard(
+                              'Active',
+                              _reportData!['summary']['activeBorrowings']
+                                  .toString(),
+                              Icons.check_circle,
+                              Colors.orange,
+                            ),
                           ),
                           const SizedBox(width: 16),
-                          _buildSummaryCard(
-                            'Pending',
-                            _reportData!['summary']['pendingBorrowings']
-                                .toString(),
-                            Icons.pending,
-                            Colors.purple,
+                          Flexible(
+                            child: _buildSummaryCard(
+                              'Pending',
+                              _reportData!['summary']['pendingBorrowings']
+                                  .toString(),
+                              Icons.pending,
+                              Colors.purple,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
+                      // Full Width Card - Don't use Expanded here
                       _buildSummaryCard(
                         'Overdue',
                         _reportData!['summary']['overdueBorrowings'].toString(),
@@ -124,31 +134,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 16),
                       Container(
+                        constraints: const BoxConstraints(
+                          maxHeight: 300, // Add max height
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.red[50],
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.red[200]!),
                         ),
-                        child: Column(
-                          children: _alerts!.map((alert) {
-                            return ListTile(
-                              leading: Icon(
-                                alert['type'] == 'chemical_expiry' ||
-                                        alert['type'] == 'overdue_borrowing'
-                                    ? Icons.warning
-                                    : Icons.info,
-                                color: Colors.red,
-                              ),
-                              title: Text(alert['message']),
-                              subtitle: Text(
-                                alert['type']
-                                    .toString()
-                                    .replaceAll('_', ' ')
-                                    .toUpperCase(),
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                            );
-                          }).toList(),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min, // Add this
+                            children: _alerts!.map((alert) {
+                              return ListTile(
+                                leading: Icon(
+                                  alert['type'] == 'chemical_expiry' ||
+                                          alert['type'] == 'overdue_borrowing'
+                                      ? Icons.warning
+                                      : Icons.info,
+                                  color: Colors.red,
+                                ),
+                                title: Text(alert['message']),
+                                subtitle: Text(
+                                  alert['type']
+                                      .toString()
+                                      .replaceAll('_', ' ')
+                                      .toUpperCase(),
+                                  style: TextStyle(color: Colors.grey[600]),
+                                ),
+                              );
+                            }).toList(),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -164,7 +180,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       SizedBox(
                         height: 300,
                         child: SfCircularChart(
-                          title: ChartTitle(text: 'Chemical Categories'),
+                          title: const ChartTitle(text: 'Chemical Categories'),
                           legend: const Legend(isVisible: true),
                           series: <CircularSeries>[
                             PieSeries<_ChartData, String>(
@@ -204,39 +220,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Color color, {
     bool fullWidth = false,
   }) {
-    return Expanded(
-      flex: fullWidth ? 2 : 1,
-      child: Card(
-        elevation: 4,
-        child: Container(
-          height: 100,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: color.withValues(alpha: 0.1),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 32),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
+    // Don't wrap with Expanded - use direct widget
+    return Card(
+      elevation: 4,
+      child: Container(
+        height: 100,
+        width: fullWidth ? double.infinity : null, // Full width when needed
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: color.withValues(alpha: 0.1),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
               ),
-              Text(
-                title,
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
-                ),
+            ),
+            Text(
+              title,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 12,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

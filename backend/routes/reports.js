@@ -3,27 +3,11 @@ const Chemical = require('../models/Chemical');
 const Equipment = require('../models/Equipment');
 const Borrowing = require('../models/Borrowing');
 const PDFDocument = require('pdfkit');
-const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
-// Middleware to verify token
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
-};
 
 // Middleware to check admin/technician role
 const requireAdminOrTechnician = (req, res, next) => {

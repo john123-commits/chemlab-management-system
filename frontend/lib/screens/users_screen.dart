@@ -8,8 +8,7 @@ class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _UsersScreenState createState() => _UsersScreenState();
+  State<UsersScreen> createState() => _UsersScreenState();
 }
 
 class _UsersScreenState extends State<UsersScreen> {

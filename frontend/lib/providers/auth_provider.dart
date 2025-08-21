@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:chemlab_frontend/models/user.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
+import 'package:logger/logger.dart';
+
+var logger = Logger();
 
 class AuthProvider with ChangeNotifier {
   User? _user;
@@ -16,8 +19,23 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      logger.d('AuthProvider: Attempting login for $email');
       final response = await ApiService.login(email, password);
-      _user = User.fromJson(response['user']);
+      logger.d('AuthProvider: API response received: $response');
+
+      // Safe parsing
+      final userData = response['user'];
+      if (userData == null) {
+        throw Exception('No user data in response');
+      }
+
+      logger.d('AuthProvider: Creating user from: $userData');
+      _user = User.fromJson(userData);
+      logger.d('AuthProvider: User created successfully: ${_user?.name}');
+    } catch (error) {
+      logger.d('AuthProvider: Login error: $error');
+      _user = null;
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();

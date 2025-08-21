@@ -9,8 +9,7 @@ class EquipmentScreen extends StatefulWidget {
   const EquipmentScreen({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _EquipmentScreenState createState() => _EquipmentScreenState();
+  State<EquipmentScreen> createState() => _EquipmentScreenState();
 }
 
 class _EquipmentScreenState extends State<EquipmentScreen> {

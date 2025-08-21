@@ -5,6 +5,9 @@ import 'package:chemlab_frontend/models/user.dart';
 import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/models/equipment.dart';
 import 'package:chemlab_frontend/models/borrowing.dart';
+import 'package:logger/logger.dart';
+
+var logger = Logger();
 
 class ApiService {
   static const String baseUrl = 'http://localhost:5000/api';
@@ -38,6 +41,9 @@ class ApiService {
   // Auth endpoints
   static Future<Map<String, dynamic>> login(
       String email, String password) async {
+    logger.d('=== API SERVICE LOGIN ATTEMPT ===');
+    logger.d('Email: $email');
+
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login'),
       headers: getHeaders(),
@@ -47,8 +53,25 @@ class ApiService {
       }),
     );
 
+    logger.d('=== API RESPONSE ===');
+    logger.d('Status: ${response.statusCode}');
+    logger.d('Body: ${response.body}');
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
+      logger.d('=== PARSED DATA ===');
+      logger.d('Data: $data');
+      logger.d('Token type: ${data['token'].runtimeType}');
+      logger.d('User data type: ${data['user'].runtimeType}');
+      logger.d('User data: ${data['user']}');
+
+      if (data['user'] != null) {
+        logger.d('User fields:');
+        (data['user'] as Map).forEach((key, value) {
+          logger.d('  $key: $value (type: ${value.runtimeType})');
+        });
+      }
+
       await saveAuthToken(data['token']);
       return data;
     } else {

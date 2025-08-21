@@ -9,8 +9,7 @@ class ChemicalsScreen extends StatefulWidget {
   const ChemicalsScreen({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _ChemicalsScreenState createState() => _ChemicalsScreenState();
+  State<ChemicalsScreen> createState() => _ChemicalsScreenState();
 }
 
 class _ChemicalsScreenState extends State<ChemicalsScreen> {
