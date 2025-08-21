@@ -30,7 +30,7 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
     if (widget.chemical != null) {
       _nameController.text = widget.chemical!.name;
       _categoryController.text = widget.chemical!.category;
-      _quantityController.text = widget.chemical!.quantity.toString();
+      _quantityController.text = widget.chemical!.quantity.toStringAsFixed(2);
       _unitController.text = widget.chemical!.unit;
       _storageLocationController.text = widget.chemical!.storageLocation;
       _expiryDate = widget.chemical!.expiryDate;
@@ -62,15 +62,27 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
       setState(() => _isLoading = true);
 
       try {
+        // More robust quantity parsing
+        final quantityText = _quantityController.text.trim();
+        final quantity = double.tryParse(quantityText);
+
+        if (quantity == null) {
+          throw Exception('Invalid quantity value');
+        }
+
+        logger.d('Sending quantity: $quantity (type: ${quantity.runtimeType})');
+
         final chemicalData = {
           'name': _nameController.text.trim(),
           'category': _categoryController.text.trim(),
-          'quantity': double.parse(_quantityController.text),
+          'quantity': quantity, // Send as number
           'unit': _unitController.text.trim(),
           'storage_location': _storageLocationController.text.trim(),
           'expiry_date': DateFormat('yyyy-MM-dd').format(_expiryDate!),
           'safety_data_sheet': _safetyDataSheetPath,
         };
+
+        logger.d('Chemical data being sent: $chemicalData');
 
         if (widget.chemical == null) {
           await ApiService.createChemical(chemicalData);
@@ -86,13 +98,20 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
           );
         }
 
-        Navigator.pop(context, true);
+        if (mounted) {
+          Navigator.pop(context, true);
+        }
       } catch (error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Operation failed: ${error.toString()}')),
-        );
+        logger.d('Chemical creation error: $error');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Operation failed: ${error.toString()}')),
+          );
+        }
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
@@ -154,6 +173,10 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
                         }
                         if (double.tryParse(value) == null) {
                           return 'Please enter a valid number';
+                        }
+                        final parsedValue = double.tryParse(value);
+                        if (parsedValue != null && parsedValue < 0) {
+                          return 'Quantity cannot be negative';
                         }
                         return null;
                       },

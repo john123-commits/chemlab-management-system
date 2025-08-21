@@ -4,12 +4,33 @@ class Chemical {
   static async create(chemicalData) {
     const { name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet } = chemicalData;
     
+    console.log('Creating chemical with raw data:', { name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet });
+    console.log('Quantity type:', typeof quantity, 'Value:', quantity);
+    
+    // Ensure quantity is properly converted to number
+    let numericQuantity;
+    if (typeof quantity === 'string') {
+      numericQuantity = parseFloat(quantity);
+    } else if (typeof quantity === 'number') {
+      numericQuantity = quantity;
+    } else {
+      numericQuantity = 0;
+    }
+    
+    console.log('Converted quantity:', numericQuantity, 'Type:', typeof numericQuantity);
+    
+    // Validate the conversion
+    if (isNaN(numericQuantity)) {
+      throw new Error('Invalid quantity value: must be a valid number');
+    }
+    
     const result = await db.query(
       `INSERT INTO chemicals (name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet]
+      [name, category, numericQuantity, unit, storage_location, expiry_date, safety_data_sheet]
     );
     
+    console.log('Chemical created successfully:', result.rows[0]);
     return result.rows[0];
   }
 
@@ -44,11 +65,26 @@ class Chemical {
   static async update(id, chemicalData) {
     const { name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet } = chemicalData;
     
+    // Ensure quantity is properly converted to number
+    let numericQuantity;
+    if (typeof quantity === 'string') {
+      numericQuantity = parseFloat(quantity);
+    } else if (typeof quantity === 'number') {
+      numericQuantity = quantity;
+    } else {
+      numericQuantity = 0;
+    }
+    
+    // Validate the conversion
+    if (isNaN(numericQuantity)) {
+      throw new Error('Invalid quantity value: must be a valid number');
+    }
+    
     const result = await db.query(
       `UPDATE chemicals SET name = $1, category = $2, quantity = $3, unit = $4, 
        storage_location = $5, expiry_date = $6, safety_data_sheet = $7 
        WHERE id = $8 RETURNING *`,
-      [name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet, id]
+      [name, category, numericQuantity, unit, storage_location, expiry_date, safety_data_sheet, id]
     );
     
     return result.rows[0];

@@ -204,7 +204,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         Card(
                           child: Column(
                             children: _reportData!['expiringChemicals']
-                                .map((chemical) {
+                                .map<Widget>((chemical) {
                               return ListTile(
                                 title: Text(chemical['name']),
                                 subtitle: Text(
@@ -231,7 +231,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         Card(
                           child: Column(
                             children: _reportData!['lowStockChemicals']
-                                .map((chemical) {
+                                .map<Widget>((chemical) {
                               return ListTile(
                                 title: Text(chemical['name']),
                                 subtitle: Text(
@@ -257,7 +257,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         const SizedBox(height: 8),
                         Card(
                           child: Column(
-                            children: _reportData!['dueEquipment'].map((eq) {
+                            children:
+                                _reportData!['dueEquipment'].map<Widget>((eq) {
                               return ListTile(
                                 title: Text(eq['name']),
                                 subtitle: Text(
@@ -284,7 +285,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         Card(
                           child: Column(
                             children: _reportData!['overdueBorrowings']
-                                .map((borrowing) {
+                                .map<Widget>((borrowing) {
                               return ListTile(
                                 title: Text(borrowing['borrower_name']),
                                 subtitle: Text(
