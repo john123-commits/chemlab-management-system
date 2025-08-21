@@ -143,13 +143,49 @@ class _UsersScreenState extends State<UsersScreen> {
                         ),
                         trailing: PopupMenuButton(
                           itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              child: Text('Edit'),
-                              // TODO: Implement edit user
+                            PopupMenuItem(
+                              child: const Text('Edit'),
+                              onTap: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          'Edit user functionality coming soon!')),
+                                );
+                              },
                             ),
-                            const PopupMenuItem(
-                              child: Text('Delete'),
-                              // TODO: Implement delete user
+                            PopupMenuItem(
+                              child: const Text('Delete'),
+                              onTap: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Delete User'),
+                                    content: Text(
+                                        'Are you sure you want to delete ${user.name}?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (confirmed == true) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            'Delete user functionality coming soon!')),
+                                  );
+                                }
+                              },
                             ),
                           ],
                         ),

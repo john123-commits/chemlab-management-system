@@ -1,3 +1,4 @@
+import 'package:chemlab_frontend/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
@@ -80,7 +81,16 @@ class _HomeScreenState extends State<HomeScreen> {
               PopupMenuItem(
                 child: const Text('Profile'),
                 onTap: () {
-                  // TODO: Implement profile screen
+                  // Navigate to profile screen after a small delay to allow menu to close
+                  Future.delayed(const Duration(milliseconds: 100), () {
+                    if (!context.mounted) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ProfileScreen(),
+                      ),
+                    );
+                  });
                 },
               ),
               PopupMenuItem(

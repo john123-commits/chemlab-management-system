@@ -1,3 +1,4 @@
+import 'package:chemlab_frontend/screens/borrowing_details_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
@@ -176,7 +177,15 @@ class _BorrowingsScreenState extends State<BorrowingsScreen> {
                                             : Colors.orange,
                               ),
                               onTap: () {
-                                // TODO: Show borrowing details
+                                // Navigate to borrowing details screen
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        BorrowingDetailsScreen(
+                                            borrowing: borrowing),
+                                  ),
+                                );
                               },
                             ),
                           );

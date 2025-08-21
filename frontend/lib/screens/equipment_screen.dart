@@ -1,3 +1,4 @@
+import 'package:chemlab_frontend/screens/equipment_details_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:chemlab_frontend/models/equipment.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
@@ -194,7 +195,14 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                 ],
                               ),
                               onTap: () {
-                                // TODO: Show equipment details
+                                // Navigate to equipment details screen
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        EquipmentDetailsScreen(equipment: eq),
+                                  ),
+                                );
                               },
                             ),
                           );

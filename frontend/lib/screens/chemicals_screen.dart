@@ -1,3 +1,4 @@
+import 'package:chemlab_frontend/screens/chemical_details_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
@@ -266,7 +267,14 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                                 ],
                               ),
                               onTap: () {
-                                // TODO: Show chemical details
+                                // Navigate to chemical details screen
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ChemicalDetailsScreen(
+                                        chemical: chemical),
+                                  ),
+                                );
                               },
                             ),
                           );
