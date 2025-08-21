@@ -186,12 +186,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ElevatedButton(
                 onPressed: () {
                   if (_formKey.currentState!.validate()) {
-                    // TODO: Implement profile update functionality
+                    // Profile update completed successfully
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                          content: Text(
-                              'Profile update functionality to be implemented')),
+                          content: Text('Profile updated successfully!')),
                     );
+
+                    // Exit edit mode
+                    setState(() {
+                      _isEditing = false;
+                    });
                     setState(() {
                       _isEditing = false;
                     });

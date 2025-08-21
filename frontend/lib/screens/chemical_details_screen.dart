@@ -51,10 +51,11 @@ class ChemicalDetailsScreen extends StatelessWidget {
                   subtitle: const Text('Click to view SDS document'),
                   trailing: const Icon(Icons.arrow_forward_ios),
                   onTap: () {
-                    // TODO: Implement SDS viewing functionality
+                    // SDS viewing functionality coming soon
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                          content: Text('SDS viewing not implemented yet')),
+                          content: Text(
+                              'SDS document viewing will be available in future updates')),
                     );
                   },
                 ),
