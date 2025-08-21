@@ -29,18 +29,22 @@ class _BorrowingsScreenState extends State<BorrowingsScreen> {
     try {
       final status = _selectedStatus == 'All' ? null : _selectedStatus;
       final borrowings = await ApiService.getBorrowings(status: status);
-      setState(() {
-        _borrowings = borrowings;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _borrowings = borrowings;
+          _isLoading = false;
+        });
+      }
     } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to load borrowings')),
-      );
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Failed to load borrowings: ${error.toString()}')),
+        );
+      }
     }
   }
 
@@ -102,6 +106,7 @@ class _BorrowingsScreenState extends State<BorrowingsScreen> {
                                 color: Colors.grey[600],
                               ),
                             ),
+                            // Only show request button for borrowers
                             if (userRole != 'admin' && userRole != 'technician')
                               const SizedBox(height: 16),
                             if (userRole != 'admin' && userRole != 'technician')
@@ -139,6 +144,7 @@ class _BorrowingsScreenState extends State<BorrowingsScreen> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // Show borrower name only to admin/technician
                                   if (userRole == 'admin' ||
                                       userRole == 'technician')
                                     Text('Borrower: ${borrowing.borrowerName}'),
@@ -191,6 +197,7 @@ class _BorrowingsScreenState extends State<BorrowingsScreen> {
                         },
                       ),
           ),
+          // Only show request button for borrowers
           if (userRole != 'admin' && userRole != 'technician')
             Padding(
               padding: const EdgeInsets.all(16.0),

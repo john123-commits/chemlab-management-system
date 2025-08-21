@@ -1,160 +1,315 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:chemlab_frontend/models/equipment.dart';
+import 'package:chemlab_frontend/services/api_service.dart';
+import 'package:chemlab_frontend/screens/equipment_form_screen.dart';
 import 'package:intl/intl.dart';
 
-class EquipmentDetailsScreen extends StatelessWidget {
+class EquipmentDetailsScreen extends StatefulWidget {
   final Equipment equipment;
 
   const EquipmentDetailsScreen({super.key, required this.equipment});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(equipment.name),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      equipment.name,
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildDetailRow('Category', equipment.category),
-                    _buildDetailRow('Condition', equipment.condition),
-                    _buildDetailRow('Location', equipment.location),
-                    _buildDetailRow(
-                        'Last Maintenance',
-                        DateFormat('MMM dd, yyyy')
-                            .format(equipment.lastMaintenanceDate)),
-                    _buildDetailRow(
-                        'Next Maintenance',
-                        DateFormat('MMM dd, yyyy').format(
-                            equipment.lastMaintenanceDate.add(Duration(
-                                days: equipment.maintenanceSchedule)))),
-                    _buildDetailRow('Maintenance Schedule',
-                        '${equipment.maintenanceSchedule} days'),
-                    const SizedBox(height: 16),
-                    _buildStatusCard(equipment),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Maintenance History',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No maintenance records available',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    // Maintenance history functionality to be implemented
-                    Text(
-                      'Maintenance history tracking will be available in future updates',
-                      style: TextStyle(
-                        color: Colors.grey[500],
-                        fontStyle: FontStyle.italic,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  State<EquipmentDetailsScreen> createState() => _EquipmentDetailsScreenState();
+}
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 150,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
+  bool _isLoading = false;
+
+  Future<void> _deleteEquipment() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Equipment'),
+        content:
+            Text('Are you sure you want to delete ${widget.equipment.name}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
           ),
-          Expanded(
-            child: Text(value),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
+
+    if (confirmed == true) {
+      setState(() => _isLoading = true);
+
+      try {
+        await ApiService.deleteEquipment(widget.equipment.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Equipment deleted successfully')),
+          );
+          Navigator.pop(context, true); // Return true to indicate deletion
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content:
+                    Text('Failed to delete equipment: ${error.toString()}')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    }
   }
 
-  Widget _buildStatusCard(Equipment equipment) {
-    final nextMaintenanceDate = equipment.lastMaintenanceDate
-        .add(Duration(days: equipment.maintenanceSchedule));
-    final daysUntilMaintenance =
-        nextMaintenanceDate.difference(DateTime.now()).inDays;
-    final isDueSoon = daysUntilMaintenance < 30 && daysUntilMaintenance > 0;
-    final isOverdue = daysUntilMaintenance < 0;
+  @override
+  Widget build(BuildContext context) {
+    final userRole = Provider.of<AuthProvider>(context).userRole;
+    final equipment = widget.equipment;
 
-    List<Widget> statusItems = [];
-
-    if (isOverdue) {
-      statusItems.add(
-        Chip(
-          label: const Text('OVERDUE'),
-          backgroundColor: Colors.red.shade100,
-          labelStyle: TextStyle(color: Colors.red.shade800),
-        ),
-      );
-    } else if (isDueSoon) {
-      statusItems.add(
-        Chip(
-          label: const Text('MAINTENANCE DUE SOON'),
-          backgroundColor: Colors.orange.shade100,
-          labelStyle: TextStyle(color: Colors.orange.shade800),
-        ),
-      );
-    }
-
-    // Add condition status
-    MaterialColor conditionColor;
-    if (equipment.condition.toLowerCase() == 'excellent') {
-      conditionColor = Colors.green;
-    } else if (equipment.condition.toLowerCase() == 'good') {
-      conditionColor = Colors.blue;
-    } else if (equipment.condition.toLowerCase() == 'fair') {
-      conditionColor = Colors.orange;
-    } else {
-      conditionColor = Colors.red;
-    }
-
-    statusItems.add(
-      Chip(
-        label: Text(equipment.condition.toUpperCase()),
-        backgroundColor: conditionColor.shade100,
-        labelStyle: TextStyle(color: conditionColor.shade800),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(equipment.name),
+        actions: [
+          if (userRole == 'admin' || userRole == 'technician') ...[
+            PopupMenuButton(
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  child: const Text('Edit'),
+                  onTap: () {
+                    Future.delayed(const Duration(milliseconds: 100), () {
+                      if (!context.mounted) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              EquipmentFormScreen(equipment: equipment),
+                        ),
+                      ).then((result) {
+                        if (result == true && context.mounted) {
+                          Navigator.pop(context); // Refresh parent screen
+                        }
+                      });
+                    });
+                  },
+                ),
+                PopupMenuItem(
+                  onTap: _deleteEquipment,
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
-    );
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Equipment Image/Header
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.build,
+                            size: 64,
+                            color: Colors.green,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            equipment.name,
+                            style: Theme.of(context).textTheme.headlineSmall,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            equipment.category,
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
 
-    return Wrap(
-      spacing: 8.0,
-      children: statusItems,
+                  // Details Section
+                  Text(
+                    'Equipment Details',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          _buildDetailRow('Name', equipment.name),
+                          const SizedBox(height: 12),
+                          _buildDetailRow('Category', equipment.category),
+                          const SizedBox(height: 12),
+                          _buildDetailRow('Condition', equipment.condition),
+                          const SizedBox(height: 12),
+                          _buildDetailRow('Location', equipment.location),
+                          const SizedBox(height: 12),
+                          _buildDetailRow(
+                            'Last Maintenance',
+                            DateFormat('MMM dd, yyyy')
+                                .format(equipment.lastMaintenanceDate),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildDetailRow(
+                            'Next Maintenance',
+                            DateFormat('MMM dd, yyyy').format(
+                              equipment.lastMaintenanceDate.add(
+                                Duration(days: equipment.maintenanceSchedule),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildDetailRow(
+                            'Maintenance Schedule',
+                            '${equipment.maintenanceSchedule} days',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Status Section
+                  Text(
+                    'Status',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          _buildStatusChip('Condition', equipment.condition,
+                              _getConditionColor(equipment.condition)),
+                          const SizedBox(height: 12),
+                          _buildMaintenanceStatus(equipment),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 150,
+          child: Text(
+            '$label:',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[700],
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              color: Colors.grey[600],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusChip(String label, String value, Color color) {
+    return Row(
+      children: [
+        Text(
+          '$label:',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Chip(
+          label: Text(value),
+          backgroundColor: color.withValues(alpha: 0.2),
+          labelStyle: TextStyle(color: color),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMaintenanceStatus(Equipment equipment) {
+    final nextMaintenance = equipment.lastMaintenanceDate.add(
+      Duration(days: equipment.maintenanceSchedule),
+    );
+    final daysUntilMaintenance =
+        nextMaintenance.difference(DateTime.now()).inDays;
+
+    Color statusColor;
+    String statusText;
+
+    if (daysUntilMaintenance < 0) {
+      statusColor = Colors.red;
+      statusText = 'OVERDUE';
+    } else if (daysUntilMaintenance < 30) {
+      statusColor = Colors.orange;
+      statusText = 'DUE SOON';
+    } else {
+      statusColor = Colors.green;
+      statusText = 'UP TO DATE';
+    }
+
+    return Row(
+      children: [
+        Text(
+          'Maintenance Status:',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Chip(
+          label: Text(statusText),
+          backgroundColor: statusColor.withValues(alpha: 0.2),
+          labelStyle: TextStyle(color: statusColor),
+        ),
+      ],
+    );
+  }
+
+  Color _getConditionColor(String condition) {
+    switch (condition.toLowerCase()) {
+      case 'excellent':
+        return Colors.green;
+      case 'good':
+        return Colors.blue;
+      case 'fair':
+        return Colors.orange;
+      case 'poor':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 }
