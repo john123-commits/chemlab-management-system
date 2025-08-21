@@ -1,3 +1,7 @@
+import 'package:logger/logger.dart';
+
+var logger = Logger();
+
 class Chemical {
   final int id;
   final String name;
@@ -22,16 +26,33 @@ class Chemical {
   });
 
   factory Chemical.fromJson(Map<String, dynamic> json) {
+    logger.d('Chemical.fromJson called with: $json');
+
+    // Handle quantity properly - it comes as string from backend
+    double parseQuantity(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) return double.tryParse(value) ?? 0.0;
+      return 0.0;
+    }
+
     return Chemical(
-      id: json['id'],
-      name: json['name'],
-      category: json['category'],
-      quantity: json['quantity'].toDouble(),
-      unit: json['unit'],
-      storageLocation: json['storage_location'],
-      expiryDate: DateTime.parse(json['expiry_date']),
-      safetyDataSheet: json['safety_data_sheet'],
-      createdAt: DateTime.parse(json['created_at']),
+      id: json['id'] is int ? json['id'] : 0,
+      name: json['name'] is String ? json['name'] : 'Unknown',
+      category: json['category'] is String ? json['category'] : 'Unknown',
+      quantity: parseQuantity(json['quantity']),
+      unit: json['unit'] is String ? json['unit'] : 'Unknown',
+      storageLocation: json['storage_location'] is String
+          ? json['storage_location']
+          : 'Unknown',
+      expiryDate: json['expiry_date'] != null
+          ? DateTime.parse(json['expiry_date'] as String)
+          : DateTime.now(),
+      safetyDataSheet: json['safety_data_sheet'] as String?,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
     );
   }
 

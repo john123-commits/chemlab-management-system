@@ -62,15 +62,31 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
       setState(() => _isLoading = true);
 
       try {
-        // More robust quantity parsing
+        // Debug logging
+        logger.d('=== FLUTTER CHEMICAL FORM DEBUG ===');
+        logger.d('Form values:');
+        logger.d('  Name: "${_nameController.text.trim()}"');
+        logger.d('  Category: "${_categoryController.text.trim()}"');
+        logger.d('  Quantity text: "${_quantityController.text}"');
+        logger.d('  Unit: "${_unitController.text.trim()}"');
+        logger.d('  Storage: "${_storageLocationController.text.trim()}"');
+        logger.d('  Expiry Date: $_expiryDate');
+
+        // Parse quantity with detailed logging
         final quantityText = _quantityController.text.trim();
         final quantity = double.tryParse(quantityText);
 
+        logger.d('  Parsed quantity: $quantity');
+        logger.d('  Quantity type: ${quantity?.runtimeType}');
+
         if (quantity == null) {
-          throw Exception('Invalid quantity value');
+          throw Exception(
+              'Invalid quantity: "$quantityText" is not a valid number');
         }
 
-        logger.d('Sending quantity: $quantity (type: ${quantity.runtimeType})');
+        if (quantity < 0) {
+          throw Exception('Quantity cannot be negative: $quantity');
+        }
 
         final chemicalData = {
           'name': _nameController.text.trim(),
@@ -82,16 +98,20 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
           'safety_data_sheet': _safetyDataSheetPath,
         };
 
-        logger.d('Chemical data being sent: $chemicalData');
+        logger.d('Sending chemical data: $chemicalData');
 
         if (widget.chemical == null) {
+          logger.d('Calling ApiService.createChemical...');
           await ApiService.createChemical(chemicalData);
+          logger.d('Chemical creation successful!');
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Chemical added successfully')),
           );
         } else {
+          logger.d('Calling ApiService.updateChemical...');
           await ApiService.updateChemical(widget.chemical!.id, chemicalData);
+          logger.d('Chemical update successful!');
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Chemical updated successfully')),
@@ -102,7 +122,12 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
           Navigator.pop(context, true);
         }
       } catch (error) {
-        logger.d('Chemical creation error: $error');
+        logger.e('=== FLUTTER APP ERROR ===');
+        logger.e('Error type: ${error.runtimeType}');
+        logger.e('Error message: $error');
+        logger.e(
+            'Stack trace: ${error is Error ? error.stackTrace : 'No stack trace'}');
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Operation failed: ${error.toString()}')),

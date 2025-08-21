@@ -145,17 +145,41 @@ class ApiService {
 
   static Future<Chemical> createChemical(
       Map<String, dynamic> chemicalData) async {
-    final token = await getAuthToken();
-    final response = await http.post(
-      Uri.parse('$baseUrl/chemicals'),
-      headers: getHeaders(token),
-      body: jsonEncode(chemicalData),
-    );
+    try {
+      logger.d('=== API SERVICE CREATE CHEMICAL ===');
+      logger.d('Chemical data being sent: $chemicalData');
 
-    if (response.statusCode == 201) {
-      return Chemical.fromJson(jsonDecode(response.body));
-    } else {
-      throw Exception('Failed to create chemical: ${response.body}');
+      // Log specific field types
+      chemicalData.forEach((key, value) {
+        logger.d('  $key: $value (type: ${value.runtimeType})');
+      });
+
+      final token = await getAuthToken();
+      logger.d('Auth token: $token');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/chemicals'),
+        headers: getHeaders(token),
+        body: jsonEncode(chemicalData),
+      );
+
+      logger.d('API Response Status: ${response.statusCode}');
+      logger.d('API Response Body: ${response.body}');
+
+      if (response.statusCode == 201) {
+        final responseData = jsonDecode(response.body);
+        logger.d('Chemical creation successful, response: $responseData');
+        return Chemical.fromJson(responseData);
+      } else {
+        logger.e(
+            'Chemical creation failed with status ${response.statusCode}: ${response.body}');
+        throw Exception('Failed to create chemical: ${response.body}');
+      }
+    } catch (error) {
+      logger.e('=== API SERVICE CREATE CHEMICAL ERROR ===');
+      logger.e('Error: $error');
+      logger.e('Error type: ${error.runtimeType}');
+      rethrow;
     }
   }
 
