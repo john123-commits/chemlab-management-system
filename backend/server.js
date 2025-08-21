@@ -30,6 +30,12 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Test route for debugging
+app.get('/api/test-login', (req, res) => {
+  console.log('=== TEST ROUTE HIT ===');
+  res.json({ message: 'Test route working', timestamp: new Date().toISOString() });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
