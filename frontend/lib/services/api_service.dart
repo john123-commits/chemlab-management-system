@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:chemlab_frontend/models/lecture_schedule.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chemlab_frontend/models/user.dart';
@@ -301,6 +302,87 @@ class ApiService {
       return Borrowing.fromJson(jsonDecode(response.body));
     } else {
       throw Exception('Failed to create borrowing request: ${response.body}');
+    }
+  }
+
+// Lecture Schedule endpoints
+  static Future<List<LectureSchedule>> getLectureSchedules(
+      {String? status, String? date}) async {
+    final token = await getAuthToken();
+    final queryParams = [];
+    if (status != null) queryParams.add('status=$status');
+    if (date != null) queryParams.add('date=$date');
+    final queryString =
+        queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/lecture-schedules$queryString'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => LectureSchedule.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load lecture schedules');
+    }
+  }
+
+  static Future<LectureSchedule> getLectureSchedule(int id) async {
+    final token = await getAuthToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/lecture-schedules/$id'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      return LectureSchedule.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Failed to load lecture schedule');
+    }
+  }
+
+  static Future<LectureSchedule> createLectureSchedule(
+      Map<String, dynamic> scheduleData) async {
+    final token = await getAuthToken();
+    final response = await http.post(
+      Uri.parse('$baseUrl/lecture-schedules'),
+      headers: getHeaders(token),
+      body: jsonEncode(scheduleData),
+    );
+
+    if (response.statusCode == 201) {
+      return LectureSchedule.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Failed to create lecture schedule: ${response.body}');
+    }
+  }
+
+  static Future<LectureSchedule> updateLectureSchedule(
+      int id, Map<String, dynamic> updateData) async {
+    final token = await getAuthToken();
+    final response = await http.put(
+      Uri.parse('$baseUrl/lecture-schedules/$id'),
+      headers: getHeaders(token),
+      body: jsonEncode(updateData),
+    );
+
+    if (response.statusCode == 200) {
+      return LectureSchedule.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Failed to update lecture schedule: ${response.body}');
+    }
+  }
+
+  static Future<void> deleteLectureSchedule(int id) async {
+    final token = await getAuthToken();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/lecture-schedules/$id'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete lecture schedule');
     }
   }
 

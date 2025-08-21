@@ -8,6 +8,7 @@ import 'package:chemlab_frontend/screens/equipment_screen.dart';
 import 'package:chemlab_frontend/screens/borrowings_screen.dart';
 import 'package:chemlab_frontend/screens/reports_screen.dart';
 import 'package:chemlab_frontend/screens/users_screen.dart';
+import 'package:chemlab_frontend/screens/lecture_schedules_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   late List<Widget> _screens;
   late List<String> _titles;
+  late List<BottomNavigationBarItem> _navItems;
 
   @override
   void initState() {
@@ -30,26 +32,98 @@ class _HomeScreenState extends State<HomeScreen> {
   void _updateScreens() {
     final userRole = Provider.of<AuthProvider>(context, listen: false).userRole;
 
-    _screens = [
-      const DashboardScreen(),
-      const ChemicalsScreen(),
-      const EquipmentScreen(),
-      const BorrowingsScreen(),
-      const ReportsScreen(),
-    ];
+    if (userRole == 'borrower') {
+      // Borrower screens
+      _screens = [
+        const DashboardScreen(),
+        const ChemicalsScreen(),
+        const EquipmentScreen(),
+        const BorrowingsScreen(),
+      ];
 
-    _titles = [
-      'Dashboard',
-      'Chemicals',
-      'Equipment',
-      'Borrowings',
-      'Reports',
-    ];
+      _titles = [
+        'Dashboard',
+        'Chemicals',
+        'Equipment',
+        'My Requests',
+      ];
 
-    // Add Users screen for admin
-    if (userRole == 'admin') {
-      _screens.add(const UsersScreen());
-      _titles.add('Users');
+      _navItems = [
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard),
+          label: 'Dashboard',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.science),
+          label: 'Chemicals',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.build),
+          label: 'Equipment',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.assignment),
+          label: 'My Requests',
+        ),
+      ];
+    } else {
+      // Admin/Technician screens
+      _screens = [
+        const DashboardScreen(),
+        const ChemicalsScreen(),
+        const EquipmentScreen(),
+        const BorrowingsScreen(),
+        const LectureSchedulesScreen(),
+        const ReportsScreen(),
+      ];
+
+      _titles = [
+        'Dashboard',
+        'Chemicals',
+        'Equipment',
+        'Borrowings',
+        'Lecture Schedules',
+        'Reports',
+      ];
+
+      _navItems = [
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard),
+          label: 'Dashboard',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.science),
+          label: 'Chemicals',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.build),
+          label: 'Equipment',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.assignment),
+          label: 'Borrowings',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.calendar_today),
+          label: 'Lecture Schedules',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.bar_chart),
+          label: 'Reports',
+        ),
+      ];
+
+      // Add Users screen for admin
+      if (userRole == 'admin') {
+        _screens.add(const UsersScreen());
+        _titles.add('Users');
+        _navItems.add(
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.people),
+            label: 'Users',
+          ),
+        );
+      }
     }
   }
 
@@ -62,13 +136,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    // ignore: unused_local_variable
     final userRole = authProvider.userRole;
 
     // Update screens if role changes
-    if (_screens.length != _titles.length ||
-        (userRole == 'admin' && _screens.length == 5)) {
-      _updateScreens();
-    }
+    _updateScreens();
 
     return Scaffold(
       appBar: AppBar(
@@ -105,33 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.science),
-            label: 'Chemicals',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.build),
-            label: 'Equipment',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.assignment),
-            label: 'Borrowings',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart),
-            label: 'Reports',
-          ),
-          if (userRole == 'admin')
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.people),
-              label: 'Users',
-            ),
-        ],
+        items: _navItems,
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,

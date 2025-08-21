@@ -51,6 +51,25 @@ CREATE TABLE borrowings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE lecture_schedules (
+    id SERIAL PRIMARY KEY,
+    admin_id INTEGER REFERENCES users(id),
+    technician_id INTEGER REFERENCES users(id),
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    required_chemicals JSONB,
+    required_equipment JSONB,
+    scheduled_date DATE NOT NULL,
+    scheduled_time VARCHAR(10) NOT NULL,
+    duration INTEGER, -- in minutes
+    priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'in_progress', 'completed', 'cancelled')),
+    technician_notes TEXT,
+    confirmation_date TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_chemicals_category ON chemicals(category);
 CREATE INDEX idx_chemicals_expiry ON chemicals(expiry_date);
@@ -59,3 +78,7 @@ CREATE INDEX idx_equipment_maintenance ON equipment(last_maintenance_date);
 CREATE INDEX idx_borrowings_status ON borrowings(status);
 CREATE INDEX idx_borrowings_borrower ON borrowings(borrower_id);
 CREATE INDEX idx_borrowings_dates ON borrowings(borrow_date, return_date);
+CREATE INDEX idx_lecture_schedules_admin ON lecture_schedules(admin_id);
+CREATE INDEX idx_lecture_schedules_technician ON lecture_schedules(technician_id);
+CREATE INDEX idx_lecture_schedules_date ON lecture_schedules(scheduled_date);
+CREATE INDEX idx_lecture_schedules_status ON lecture_schedules(status);

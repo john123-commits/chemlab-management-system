@@ -3,6 +3,9 @@ import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:logger/logger.dart';
+
+var logger = Logger();
 
 class ChemicalFormScreen extends StatefulWidget {
   final Chemical? chemical;
