@@ -10,6 +10,7 @@ class ChemicalFormScreen extends StatefulWidget {
   const ChemicalFormScreen({super.key, this.chemical});
 
   @override
+  // ignore: library_private_types_in_public_api
   _ChemicalFormScreenState createState() => _ChemicalFormScreenState();
 }
 
@@ -74,11 +75,13 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
 
         if (widget.chemical == null) {
           await ApiService.createChemical(chemicalData);
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Chemical added successfully')),
           );
         } else {
           await ApiService.updateChemical(widget.chemical!.id, chemicalData);
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Chemical updated successfully')),
           );

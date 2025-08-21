@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
         builder: (context, authProvider, _) {
           return authProvider.isAuthenticated
               ? const HomeScreen()
-              : LoginScreen();
+              : const LoginScreen();
         },
       ),
       debugShowCheckedModeBanner: false,

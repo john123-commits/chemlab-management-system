@@ -8,6 +8,7 @@ class EquipmentScreen extends StatefulWidget {
   const EquipmentScreen({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _EquipmentScreenState createState() => _EquipmentScreenState();
 }
 
@@ -32,6 +33,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       setState(() {
         _isLoading = false;
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to load equipment')),
       );
@@ -106,7 +108,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('${eq.category}'),
+                                  Text(eq.category),
                                   Text('Condition: ${eq.condition}'),
                                   Text('Location: ${eq.location}'),
                                   Text(
@@ -170,6 +172,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                           await ApiService.deleteEquipment(
                                               eq.id);
                                           _loadEquipment();
+                                          if (!context.mounted) return;
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
                                             const SnackBar(
@@ -177,6 +180,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                                     'Equipment deleted successfully')),
                                           );
                                         } catch (error) {
+                                          if (!context.mounted) return;
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
                                             const SnackBar(

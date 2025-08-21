@@ -8,6 +8,7 @@ class BorrowingFormScreen extends StatefulWidget {
   const BorrowingFormScreen({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _BorrowingFormScreenState createState() => _BorrowingFormScreenState();
 }
 
@@ -45,6 +46,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
       setState(() {
         _isLoading = false;
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to load inventory')),
       );
@@ -116,7 +118,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
         };
 
         await ApiService.createBorrowing(borrowingData);
-
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Borrowing request submitted successfully')),

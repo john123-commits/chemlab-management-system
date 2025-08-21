@@ -10,6 +10,7 @@ class BorrowingsScreen extends StatefulWidget {
   const BorrowingsScreen({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _BorrowingsScreenState createState() => _BorrowingsScreenState();
 }
 
@@ -33,6 +34,7 @@ class _BorrowingsScreenState extends State<BorrowingsScreen> {
         _isLoading = false;
       });
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -57,7 +59,7 @@ class _BorrowingsScreenState extends State<BorrowingsScreen> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: DropdownButtonFormField<String>(
-              value: _selectedStatus,
+              initialValue: _selectedStatus,
               decoration: InputDecoration(
                 labelText: 'Status',
                 border: OutlineInputBorder(

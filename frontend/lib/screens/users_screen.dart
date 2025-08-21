@@ -5,7 +5,10 @@ import 'package:chemlab_frontend/models/user.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
 
 class UsersScreen extends StatefulWidget {
+  const UsersScreen({super.key});
+
   @override
+  // ignore: library_private_types_in_public_api
   _UsersScreenState createState() => _UsersScreenState();
 }
 
@@ -30,8 +33,9 @@ class _UsersScreenState extends State<UsersScreen> {
       setState(() {
         _isLoading = false;
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load users')),
+        const SnackBar(content: Text('Failed to load users')),
       );
     }
   }
@@ -54,7 +58,7 @@ class _UsersScreenState extends State<UsersScreen> {
               size: 64,
               color: Colors.grey[400],
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Text(
               'Access Denied',
               style: TextStyle(
@@ -76,7 +80,7 @@ class _UsersScreenState extends State<UsersScreen> {
     return RefreshIndicator(
       onRefresh: _refreshUsers,
       child: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : _users.isEmpty
               ? Center(
                   child: Column(
@@ -87,7 +91,7 @@ class _UsersScreenState extends State<UsersScreen> {
                         size: 64,
                         color: Colors.grey[400],
                       ),
-                      SizedBox(height: 16),
+                      const SizedBox(height: 16),
                       Text(
                         'No users found',
                         style: TextStyle(
@@ -103,7 +107,7 @@ class _UsersScreenState extends State<UsersScreen> {
                   itemBuilder: (context, index) {
                     final user = _users[index];
                     return Card(
-                      margin: EdgeInsets.symmetric(
+                      margin: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 8,
                       ),
@@ -139,11 +143,11 @@ class _UsersScreenState extends State<UsersScreen> {
                         ),
                         trailing: PopupMenuButton(
                           itemBuilder: (context) => [
-                            PopupMenuItem(
+                            const PopupMenuItem(
                               child: Text('Edit'),
                               // TODO: Implement edit user
                             ),
-                            PopupMenuItem(
+                            const PopupMenuItem(
                               child: Text('Delete'),
                               // TODO: Implement delete user
                             ),

@@ -8,6 +8,7 @@ class ChemicalsScreen extends StatefulWidget {
   const ChemicalsScreen({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _ChemicalsScreenState createState() => _ChemicalsScreenState();
 }
 
@@ -36,6 +37,7 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
       setState(() {
         _isLoading = false;
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to load chemicals')),
       );
@@ -94,7 +96,7 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _selectedCategory,
+                  initialValue: _selectedCategory,
                   decoration: InputDecoration(
                     labelText: 'Category',
                     border: OutlineInputBorder(
@@ -175,7 +177,7 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('${chemical.category}'),
+                                  Text(chemical.category),
                                   Text(
                                     '${chemical.quantity} ${chemical.unit}',
                                     style: TextStyle(
@@ -242,6 +244,7 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                                           await ApiService.deleteChemical(
                                               chemical.id);
                                           _loadChemicals();
+                                          if (!context.mounted) return;
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
                                             const SnackBar(
@@ -249,6 +252,7 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                                                     'Chemical deleted successfully')),
                                           );
                                         } catch (error) {
+                                          if (!context.mounted) return;
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
                                             const SnackBar(

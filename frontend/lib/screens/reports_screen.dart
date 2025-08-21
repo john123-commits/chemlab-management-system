@@ -9,6 +9,7 @@ class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _ReportsScreenState createState() => _ReportsScreenState();
 }
 
@@ -33,6 +34,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       setState(() {
         _isLoading = false;
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to load report')),
       );
