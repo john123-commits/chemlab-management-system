@@ -1,3 +1,7 @@
+import 'package:chemlab_frontend/models/chemical.dart';
+import 'package:chemlab_frontend/models/equipment.dart';
+import 'package:chemlab_frontend/screens/chemical_details_screen.dart';
+import 'package:chemlab_frontend/screens/equipment_details_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
@@ -329,6 +333,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               width: double.infinity,
                               child: ElevatedButton.icon(
                                 onPressed: () {
+                                  _showSearchDialog(context, 'chemicals');
+                                },
+                                icon: const Icon(Icons.search),
+                                label: const Text('Search Chemicals'),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  _showSearchDialog(context, 'equipment');
+                                },
+                                icon: const Icon(Icons.search),
+                                label: const Text('Search Equipment'),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -338,7 +364,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   );
                                 },
                                 icon: const Icon(Icons.science),
-                                label: const Text('View Chemicals'),
+                                label: const Text('View All Chemicals'),
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -355,7 +381,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   );
                                 },
                                 icon: const Icon(Icons.build),
-                                label: const Text('View Equipment'),
+                                label: const Text('View All Equipment'),
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -437,6 +463,98 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // Show search dialog for chemicals or equipment
+  void _showSearchDialog(BuildContext context, String type) {
+    final isChemicals = type == 'chemicals';
+    final searchController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            isChemicals ? 'Search Chemicals' : 'Search Equipment',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: searchController,
+                decoration: InputDecoration(
+                  hintText: isChemicals
+                      ? 'Enter chemical name or category...'
+                      : 'Enter equipment name or category...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                autofocus: true,
+                onSubmitted: (value) {
+                  if (value.isNotEmpty) {
+                    Navigator.pop(context);
+                    _navigateToSearchResults(type, value);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Tip: You can search by name, category, or other keywords',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (searchController.text.isNotEmpty) {
+                  Navigator.pop(context);
+                  _navigateToSearchResults(type, searchController.text);
+                }
+              },
+              child: const Text('Search'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Navigate to search results
+  void _navigateToSearchResults(String type, String query) {
+    if (type == 'chemicals') {
+      // Navigate to chemicals screen with search pre-filled
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SearchResultsScreen(
+            searchType: 'chemicals',
+            searchQuery: query,
+          ),
+        ),
+      );
+    } else {
+      // Navigate to equipment screen with search pre-filled
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SearchResultsScreen(
+            searchType: 'equipment',
+            searchQuery: query,
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildSummaryCard(
     String title,
     String value,
@@ -481,10 +599,263 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// ignore: unused_element
-class _ChartData {
-  final String x;
-  final int y;
+// Search Results Screen
+class SearchResultsScreen extends StatefulWidget {
+  final String searchType;
+  final String searchQuery;
 
-  _ChartData(this.x, this.y);
+  const SearchResultsScreen({
+    super.key,
+    required this.searchType,
+    required this.searchQuery,
+  });
+
+  @override
+  State<SearchResultsScreen> createState() => _SearchResultsScreenState();
+}
+
+class _SearchResultsScreenState extends State<SearchResultsScreen> {
+  late TextEditingController _searchController;
+  List<dynamic> _searchResults = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: widget.searchQuery);
+    _performSearch();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _performSearch() async {
+    setState(() => _isLoading = true);
+
+    try {
+      if (widget.searchType == 'chemicals') {
+        final results = await ApiService.getChemicals(
+            filters: {'search': widget.searchQuery});
+        if (mounted) {
+          setState(() {
+            _searchResults = results;
+            _isLoading = false;
+          });
+        }
+      } else {
+        // For equipment, we'll need to implement client-side filtering
+        // since the API doesn't support search yet
+        final allEquipment = await ApiService.getEquipment();
+        final filtered = allEquipment.where((eq) {
+          return eq.name
+                  .toLowerCase()
+                  .contains(widget.searchQuery.toLowerCase()) ||
+              eq.category
+                  .toLowerCase()
+                  .contains(widget.searchQuery.toLowerCase()) ||
+              eq.condition
+                  .toLowerCase()
+                  .contains(widget.searchQuery.toLowerCase()) ||
+              eq.location
+                  .toLowerCase()
+                  .contains(widget.searchQuery.toLowerCase());
+        }).toList();
+
+        if (mounted) {
+          setState(() {
+            _searchResults = filtered;
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Search failed: ${error.toString()}')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isChemicals = widget.searchType == 'chemicals';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(isChemicals
+            ? 'Chemical Search Results'
+            : 'Equipment Search Results'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText:
+                    isChemicals ? 'Search chemicals...' : 'Search equipment...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onSubmitted: (value) {
+                if (value.isNotEmpty) {
+                  // Update search and re-perform
+                  setState(() {
+                    _searchResults = [];
+                  });
+                  _performSearch();
+                }
+              },
+            ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _searchResults.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isChemicals
+                                  ? Icons.science_outlined
+                                  : Icons.build_outlined,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No ${isChemicals ? 'chemicals' : 'equipment'} found',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Back to Dashboard'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _searchResults.length,
+                        itemBuilder: (context, index) {
+                          if (isChemicals) {
+                            final chemical = _searchResults[index] as Chemical;
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: Colors.blue[100],
+                                  child: const Icon(
+                                    Icons.science,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                                title: Text(chemical.name),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(chemical.category),
+                                    Text(
+                                      '${chemical.quantity} ${chemical.unit}',
+                                      style: TextStyle(
+                                        color: chemical.quantity < 10
+                                            ? Colors.red
+                                            : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          ChemicalDetailsScreen(
+                                              chemical: chemical),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          } else {
+                            final equipment =
+                                _searchResults[index] as Equipment;
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: Colors.green[100],
+                                  child: const Icon(
+                                    Icons.build,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                                title: Text(equipment.name),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(equipment.category),
+                                    Text('Condition: ${equipment.condition}'),
+                                    Text('Location: ${equipment.location}'),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          EquipmentDetailsScreen(
+                                              equipment: equipment),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          }
+                        },
+                      ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Back to Dashboard'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 48),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
