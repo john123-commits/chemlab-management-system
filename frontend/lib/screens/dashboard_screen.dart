@@ -21,6 +21,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _reportData;
   List<dynamic>? _alerts;
+  int _pendingRequestsCount = 0;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -35,9 +36,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final userRole =
           Provider.of<AuthProvider>(context, listen: false).userRole;
 
-      // Borrowers get limited dashboard
+      // For borrowers - limited dashboard
       if (userRole == 'borrower') {
-        // Load only alerts for borrowers (if they have permission)
         try {
           final alerts = await ApiService.getAlerts();
           if (mounted) {
@@ -47,7 +47,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             });
           }
         } catch (alertError) {
-          // Borrowers might not have alert access
           if (mounted) {
             setState(() {
               _alerts = [];
@@ -55,15 +54,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             });
           }
         }
-      } else {
-        // Admin/Technician get full dashboard
+      }
+      // For technicians and admins - staff dashboard
+      else {
+        // Load dashboard data for staff
         final report = await ApiService.getMonthlyReport();
         final alerts = await ApiService.getAlerts();
+        final pendingCount = await ApiService.getPendingRequestsCount();
 
         if (mounted) {
           setState(() {
             _reportData = report;
             _alerts = alerts;
+            _pendingRequestsCount = pendingCount;
             _isLoading = false;
           });
         }
@@ -93,7 +96,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return _buildBorrowerDashboard();
     }
 
-    // Full dashboard for admin/technician
+    // Staff dashboard for technicians and admins
+    return _buildStaffDashboard();
+  }
+
+  Widget _buildStaffDashboard() {
+    final userRole = Provider.of<AuthProvider>(context).userRole;
+    final isTechnician = userRole == 'technician';
+
     return RefreshIndicator(
       onRefresh: _loadDashboardData,
       child: SingleChildScrollView(
@@ -135,8 +145,169 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Summary Cards
-                        if (_reportData != null) ...[
+                        // Welcome Header
+                        Text(
+                          isTechnician
+                              ? 'Technician Dashboard'
+                              : 'Admin Dashboard',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Pending Requests Alert
+                        if (_pendingRequestsCount > 0) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 24),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[100],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.orange[300]!),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.warning,
+                                  color: Colors.orange,
+                                  size: 32,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '$_pendingRequestsCount Pending Request${_pendingRequestsCount == 1 ? '' : 's'}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: Colors.orange,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const Text(
+                                        'Review pending borrowing requests',
+                                        style: TextStyle(
+                                          color: Colors.orange,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const BorrowingsScreen(),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text('Review'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        // Quick Actions Card
+                        Card(
+                          elevation: 4,
+                          child: Padding(
+                            padding: const EdgeInsets.all(24.0),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.build_outlined,
+                                  size: 64,
+                                  color: Colors.blue,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  isTechnician
+                                      ? 'Welcome Technician!'
+                                      : 'Welcome Admin!',
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                const Text(
+                                  'Quick Actions:',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                    '• Manage chemical and equipment inventory'),
+                                const Text(
+                                    '• Review and approve borrowing requests'),
+                                const Text('• Monitor system alerts'),
+                                const SizedBox(height: 24),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const ChemicalsScreen(),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.science),
+                                    label: const Text('Manage Chemicals'),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const EquipmentScreen(),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.build),
+                                    label: const Text('Manage Equipment'),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const BorrowingsScreen(),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.assignment),
+                                    label: const Text('Review Requests'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Summary Cards (for admin with full reports)
+                        if (!isTechnician && _reportData != null) ...[
                           Text(
                             'Summary',
                             style: Theme.of(context).textTheme.titleLarge,
@@ -207,7 +378,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         // Alerts Section
                         if (_alerts != null && _alerts!.isNotEmpty) ...[
                           Text(
-                            'Alerts',
+                            'System Alerts',
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 16),
@@ -249,8 +420,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           const SizedBox(height: 32),
                         ],
 
-                        // Charts Section (only for admin/technician)
-                        if (_reportData != null) ...[
+                        // Charts Section (only for admin)
+                        if (!isTechnician && _reportData != null) ...[
                           Text(
                             'Inventory Overview',
                             style: Theme.of(context).textTheme.titleLarge,
@@ -282,277 +453,162 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildBorrowerDashboard() {
     return RefreshIndicator(
-      onRefresh: _loadDashboardData,
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Borrower Dashboard',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 24),
-                    Card(
-                      elevation: 4,
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          children: [
-                            const Icon(
-                              Icons.science_outlined,
-                              size: 64,
-                              color: Colors.blue,
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Welcome Borrower!',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'You can:',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                                '• View available chemicals and equipment'),
-                            const Text('• Submit borrowing requests'),
-                            const Text('• View your request status'),
-                            const SizedBox(height: 24),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  _showSearchDialog(context, 'chemicals');
-                                },
-                                icon: const Icon(Icons.search),
-                                label: const Text('Search Chemicals'),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  _showSearchDialog(context, 'equipment');
-                                },
-                                icon: const Icon(Icons.search),
-                                label: const Text('Search Equipment'),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const ChemicalsScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.science),
-                                label: const Text('View All Chemicals'),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const EquipmentScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.build),
-                                label: const Text('View All Equipment'),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const BorrowingsScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.assignment),
-                                label: const Text('My Requests'),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const BorrowingFormScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.add),
-                                label: const Text('Request Borrowing'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Borrower alerts (if any)
-                    if (_alerts != null && _alerts!.isNotEmpty) ...[
+        onRefresh: _loadDashboardData,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        'Your Alerts',
-                        style: Theme.of(context).textTheme.titleLarge,
+                        'Borrower Dashboard',
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
-                      const SizedBox(height: 16),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.orange[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange[200]!),
-                        ),
-                        child: Column(
-                          children: _alerts!.map((alert) {
-                            return ListTile(
-                              leading: const Icon(
-                                Icons.info,
-                                color: Colors.orange,
+                      const SizedBox(height: 24),
+                      Card(
+                        elevation: 4,
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.science_outlined,
+                                size: 64,
+                                color: Colors.blue,
                               ),
-                              title: Text(alert['message']),
-                              subtitle: Text(
-                                alert['type']
-                                    .toString()
-                                    .replaceAll('_', ' ')
-                                    .toUpperCase(),
-                                style: TextStyle(color: Colors.grey[600]),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Welcome Borrower!',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            );
-                          }).toList(),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'You can:',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                  '• View available chemicals and equipment'),
+                              const Text('• Submit borrowing requests'),
+                              const Text('• View your request status'),
+                              const SizedBox(height: 24),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const ChemicalsScreen(),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.science),
+                                  label: const Text('View Chemicals'),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const EquipmentScreen(),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.build),
+                                  label: const Text('View Equipment'),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const BorrowingsScreen(),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.assignment),
+                                  label: const Text('My Requests'),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const BorrowingFormScreen(),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Request Borrowing'),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
+                      const SizedBox(height: 24),
+                      // Borrower alerts (if any)
+                      if (_alerts != null && _alerts!.isNotEmpty) ...[
+                        Text(
+                          'Your Alerts',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.orange[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange[200]!),
+                          ),
+                          child: Column(
+                            children: _alerts!.map((alert) {
+                              return ListTile(
+                                leading: const Icon(
+                                  Icons.info,
+                                  color: Colors.orange,
+                                ),
+                                title: Text(alert['message']),
+                                subtitle: Text(
+                                  alert['type']
+                                      .toString()
+                                      .replaceAll('_', ' ')
+                                      .toUpperCase(),
+                                  style: TextStyle(color: Colors.grey[600]),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
-
-  // Show search dialog for chemicals or equipment
-  void _showSearchDialog(BuildContext context, String type) {
-    final isChemicals = type == 'chemicals';
-    final searchController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(
-            isChemicals ? 'Search Chemicals' : 'Search Equipment',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: searchController,
-                decoration: InputDecoration(
-                  hintText: isChemicals
-                      ? 'Enter chemical name or category...'
-                      : 'Enter equipment name or category...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
                   ),
-                ),
-                autofocus: true,
-                onSubmitted: (value) {
-                  if (value.isNotEmpty) {
-                    Navigator.pop(context);
-                    _navigateToSearchResults(type, value);
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Tip: You can search by name, category, or other keywords',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
-              ),
-            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (searchController.text.isNotEmpty) {
-                  Navigator.pop(context);
-                  _navigateToSearchResults(type, searchController.text);
-                }
-              },
-              child: const Text('Search'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Navigate to search results
-  void _navigateToSearchResults(String type, String query) {
-    if (type == 'chemicals') {
-      // Navigate to chemicals screen with search pre-filled
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SearchResultsScreen(
-            searchType: 'chemicals',
-            searchQuery: query,
-          ),
-        ),
-      );
-    } else {
-      // Navigate to equipment screen with search pre-filled
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SearchResultsScreen(
-            searchType: 'equipment',
-            searchQuery: query,
-          ),
-        ),
-      );
-    }
+        ));
   }
 
   Widget _buildSummaryCard(
@@ -599,7 +655,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// Search Results Screen
+// Search Results Screen (same as before)
 class SearchResultsScreen extends StatefulWidget {
   final String searchType;
   final String searchQuery;

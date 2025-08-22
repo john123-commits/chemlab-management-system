@@ -1,10 +1,9 @@
 const express = require('express');
 const Borrowing = require('../models/Borrowing');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireAdminOrTechnician } = require('../middleware/auth'); // ✅ Added requireAdminOrTechnician
 const router = express.Router();
 
-// Get all borrowings
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, requireAdminOrTechnician, async (req, res) => {
   try {
     const filters = {};
     if (req.user.role !== 'admin' && req.user.role !== 'technician') {
@@ -108,13 +107,8 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
 });
 
 // Get pending requests count (for dashboard alerts)
-router.get('/pending/count', authenticateToken, async (req, res) => {
+router.get('/pending/count', authenticateToken, requireAdminOrTechnician, async (req, res) => { // ✅ Added middleware
   try {
-    // Only admin and technician can see pending requests count
-    if (req.user.role !== 'admin' && req.user.role !== 'technician') {
-      return res.status(403).json({ error: 'Permission denied' });
-    }
-    
     const count = await Borrowing.getPendingRequestsCount();
     res.json({ count });
   } catch (error) {
@@ -123,13 +117,8 @@ router.get('/pending/count', authenticateToken, async (req, res) => {
 });
 
 // Get pending requests (for admin/technician review)
-router.get('/pending', authenticateToken, async (req, res) => {
+router.get('/pending', authenticateToken, requireAdminOrTechnician, async (req, res) => { // ✅ Added middleware
   try {
-    // Only admin and technician can see pending requests
-    if (req.user.role !== 'admin' && req.user.role !== 'technician') {
-      return res.status(403).json({ error: 'Permission denied' });
-    }
-    
     const pendingRequests = await Borrowing.getPendingRequests();
     res.json(pendingRequests);
   } catch (error) {
