@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/models/equipment.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
+import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:intl/intl.dart';
 
 class EquipmentFormScreen extends StatefulWidget {
@@ -76,19 +78,53 @@ class _EquipmentFormScreenState extends State<EquipmentFormScreen> {
           );
         }
 
-        Navigator.pop(context, true);
+        if (mounted) {
+          Navigator.pop(context, true);
+        }
       } catch (error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Operation failed: ${error.toString()}')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Operation failed: ${error.toString()}')),
+          );
+        }
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Check if user is borrower - they should never access this screen
+    final userRole = Provider.of<AuthProvider>(context).userRole;
+    if (userRole == 'borrower') {
+      // Immediately navigate back
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Access denied: Insufficient permissions')),
+          );
+          Navigator.pop(context);
+        }
+      });
+
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Access Denied'),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title:
@@ -170,6 +206,10 @@ class _EquipmentFormScreenState extends State<EquipmentFormScreen> {
                   if (int.tryParse(value) == null) {
                     return 'Please enter a valid number';
                   }
+                  final parsedValue = int.tryParse(value);
+                  if (parsedValue != null && parsedValue <= 0) {
+                    return 'Maintenance schedule must be positive';
+                  }
                   return null;
                 },
               ),
@@ -190,7 +230,7 @@ class _EquipmentFormScreenState extends State<EquipmentFormScreen> {
                     firstDate: DateTime(2020),
                     lastDate: DateTime(2030),
                   );
-                  if (pickedDate != null) {
+                  if (pickedDate != null && mounted) {
                     setState(() {
                       _lastMaintenanceDate = pickedDate;
                     });

@@ -38,7 +38,7 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
       setState(() => _isLoading = true);
 
       try {
@@ -69,38 +69,43 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
   Widget build(BuildContext context) {
     final userRole = Provider.of<AuthProvider>(context).userRole;
     final equipment = widget.equipment;
+    final isBorrower = userRole == 'borrower';
 
     return Scaffold(
       appBar: AppBar(
         title: Text(equipment.name),
         actions: [
-          if (userRole == 'admin' || userRole == 'technician') ...[
+          // Only show actions for admin/technician
+          if (!isBorrower) ...[
             PopupMenuButton(
               itemBuilder: (context) => [
-                PopupMenuItem(
-                  child: const Text('Edit'),
-                  onTap: () {
-                    Future.delayed(const Duration(milliseconds: 100), () {
-                      if (!context.mounted) return;
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              EquipmentFormScreen(equipment: equipment),
-                        ),
-                      ).then((result) {
-                        if (result == true && context.mounted) {
-                          Navigator.pop(context); // Refresh parent screen
-                        }
-                      });
-                    });
-                  },
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Text('Edit'),
                 ),
-                PopupMenuItem(
-                  onTap: _deleteEquipment,
-                  child: const Text('Delete'),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Text('Delete'),
                 ),
               ],
+              onSelected: (value) {
+                if (value == 'edit') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          EquipmentFormScreen(equipment: equipment),
+                    ),
+                  ).then((result) {
+                    if (!context.mounted) return;
+                    if (result == true && mounted) {
+                      Navigator.pop(context); // Refresh parent screen
+                    }
+                  });
+                } else if (value == 'delete') {
+                  _deleteEquipment();
+                }
+              },
             ),
           ],
         ],
@@ -114,6 +119,7 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
                 children: [
                   // Equipment Image/Header
                   Card(
+                    elevation: 4,
                     child: Padding(
                       padding: const EdgeInsets.all(24.0),
                       child: Column(
@@ -150,6 +156,7 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
                   ),
                   const SizedBox(height: 16),
                   Card(
+                    elevation: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
@@ -194,6 +201,7 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
                   ),
                   const SizedBox(height: 16),
                   Card(
+                    elevation: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
@@ -250,9 +258,12 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
         ),
         const SizedBox(width: 8),
         Chip(
-          label: Text(value),
+          label: Text(value.toUpperCase()),
           backgroundColor: color.withValues(alpha: 0.2),
-          labelStyle: TextStyle(color: color),
+          labelStyle: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ],
     );
@@ -292,7 +303,10 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
         Chip(
           label: Text(statusText),
           backgroundColor: statusColor.withValues(alpha: 0.2),
-          labelStyle: TextStyle(color: statusColor),
+          labelStyle: TextStyle(
+            color: statusColor,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ],
     );
