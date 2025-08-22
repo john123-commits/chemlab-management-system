@@ -1,8 +1,10 @@
-import 'package:chemlab_frontend/screens/chemical_details_screen.dart';
+import 'package:chemlab_frontend/screens/chemical_form_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
-import 'package:chemlab_frontend/screens/chemical_form_screen.dart';
+import 'package:chemlab_frontend/screens/chemical_details_screen.dart';
+import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:intl/intl.dart';
 
 class ChemicalsScreen extends StatefulWidget {
@@ -73,6 +75,9 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final userRole = Provider.of<AuthProvider>(context).userRole;
+    final isBorrower = userRole == 'borrower';
+
     return RefreshIndicator(
       onRefresh: _refreshChemicals,
       child: Column(
@@ -140,19 +145,6 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                                 color: Colors.grey[600],
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const ChemicalFormScreen(),
-                                  ),
-                                ).then((_) => _loadChemicals());
-                              },
-                              child: const Text('Add Chemical'),
-                            ),
                           ],
                         ),
                       )
@@ -199,72 +191,34 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                                   ),
                                 ],
                               ),
-                              trailing: PopupMenuButton(
-                                itemBuilder: (context) => [
-                                  PopupMenuItem(
-                                    child: const Text('Edit'),
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              ChemicalFormScreen(
-                                            chemical: chemical,
-                                          ),
+                              // Only show popup menu for admin/technician
+                              trailing: !isBorrower
+                                  ? PopupMenuButton(
+                                      itemBuilder: (context) => [
+                                        const PopupMenuItem(
+                                          child: Text('Edit'),
                                         ),
-                                      ).then((_) => _loadChemicals());
-                                    },
-                                  ),
-                                  PopupMenuItem(
-                                    child: const Text('Delete'),
-                                    onTap: () async {
-                                      final confirmed = await showDialog<bool>(
-                                        context: context,
-                                        builder: (context) => AlertDialog(
-                                          title: const Text('Delete Chemical'),
-                                          content: Text(
-                                              'Are you sure you want to delete ${chemical.name}?'),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, false),
-                                              child: const Text('Cancel'),
-                                            ),
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, true),
-                                              child: const Text('Delete'),
-                                            ),
-                                          ],
+                                        const PopupMenuItem(
+                                          child: Text('Delete'),
                                         ),
-                                      );
-
-                                      if (confirmed == true) {
-                                        try {
-                                          await ApiService.deleteChemical(
-                                              chemical.id);
-                                          _loadChemicals();
-                                          if (!context.mounted) return;
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            const SnackBar(
-                                                content: Text(
-                                                    'Chemical deleted successfully')),
-                                          );
-                                        } catch (error) {
-                                          if (!context.mounted) return;
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            const SnackBar(
-                                                content: Text(
-                                                    'Failed to delete chemical')),
-                                          );
+                                      ],
+                                      onSelected: (value) {
+                                        if (value == 'Edit') {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  ChemicalFormScreen(
+                                                chemical: chemical,
+                                              ),
+                                            ),
+                                          ).then((_) => _loadChemicals());
+                                        } else if (value == 'Delete') {
+                                          _deleteChemical(chemical);
                                         }
-                                      }
-                                    },
-                                  ),
-                                ],
-                              ),
+                                      },
+                                    )
+                                  : null,
                               onTap: () {
                                 // Navigate to chemical details screen
                                 Navigator.push(
@@ -280,26 +234,64 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                         },
                       ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ChemicalFormScreen(),
-                  ),
-                ).then((_) => _loadChemicals());
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Add Chemical'),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
+          // Only show add button for admin/technician
+          if (!isBorrower)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ChemicalFormScreen(),
+                    ),
+                  ).then((_) => _loadChemicals());
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Add Chemical'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteChemical(Chemical chemical) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Chemical'),
+        content: Text('Are you sure you want to delete ${chemical.name}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
+
+    if (confirmed == true && mounted) {
+      try {
+        await ApiService.deleteChemical(chemical.id);
+        _loadChemicals();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Chemical deleted successfully')),
+        );
+      } catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to delete chemical')),
+        );
+      }
+    }
   }
 }

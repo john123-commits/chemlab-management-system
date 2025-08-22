@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
+import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:logger/logger.dart';
-
-var logger = Logger();
 
 class ChemicalFormScreen extends StatefulWidget {
   final Chemical? chemical;
@@ -65,22 +64,8 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
       setState(() => _isLoading = true);
 
       try {
-        // Debug logging
-        logger.d('=== FLUTTER CHEMICAL FORM DEBUG ===');
-        logger.d('Form values:');
-        logger.d('  Name: "${_nameController.text.trim()}"');
-        logger.d('  Category: "${_categoryController.text.trim()}"');
-        logger.d('  Quantity text: "${_quantityController.text}"');
-        logger.d('  Unit: "${_unitController.text.trim()}"');
-        logger.d('  Storage: "${_storageLocationController.text.trim()}"');
-        logger.d('  Expiry Date: $_expiryDate');
-
-        // Parse quantity with detailed logging
         final quantityText = _quantityController.text.trim();
         final quantity = double.tryParse(quantityText);
-
-        logger.d('  Parsed quantity: $quantity');
-        logger.d('  Quantity type: ${quantity?.runtimeType}');
 
         if (quantity == null) {
           throw Exception(
@@ -94,27 +79,21 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
         final chemicalData = {
           'name': _nameController.text.trim(),
           'category': _categoryController.text.trim(),
-          'quantity': quantity, // Send as number
+          'quantity': quantity,
           'unit': _unitController.text.trim(),
           'storage_location': _storageLocationController.text.trim(),
           'expiry_date': DateFormat('yyyy-MM-dd').format(_expiryDate!),
           'safety_data_sheet': _safetyDataSheetPath,
         };
 
-        logger.d('Sending chemical data: $chemicalData');
-
         if (widget.chemical == null) {
-          logger.d('Calling ApiService.createChemical...');
           await ApiService.createChemical(chemicalData);
-          logger.d('Chemical creation successful!');
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Chemical added successfully')),
           );
         } else {
-          logger.d('Calling ApiService.updateChemical...');
           await ApiService.updateChemical(widget.chemical!.id, chemicalData);
-          logger.d('Chemical update successful!');
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Chemical updated successfully')),
@@ -125,12 +104,6 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
           Navigator.pop(context, true);
         }
       } catch (error) {
-        logger.e('=== FLUTTER APP ERROR ===');
-        logger.e('Error type: ${error.runtimeType}');
-        logger.e('Error message: $error');
-        logger.e(
-            'Stack trace: ${error is Error ? error.stackTrace : 'No stack trace'}');
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Operation failed: ${error.toString()}')),
@@ -146,6 +119,34 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Check if user is borrower - they should never access this screen
+    final userRole = Provider.of<AuthProvider>(context).userRole;
+    if (userRole == 'borrower') {
+      // Immediately navigate back
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Access denied: Insufficient permissions')),
+          );
+          Navigator.pop(context);
+        }
+      });
+
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Access Denied'),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.chemical == null ? 'Add Chemical' : 'Edit Chemical'),

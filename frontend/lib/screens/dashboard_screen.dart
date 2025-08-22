@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
-import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:chemlab_frontend/screens/chemicals_screen.dart';
+import 'package:chemlab_frontend/screens/equipment_screen.dart';
+import 'package:chemlab_frontend/screens/borrowings_screen.dart';
+import 'package:chemlab_frontend/screens/borrowing_form_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -242,45 +245,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           const SizedBox(height: 32),
                         ],
 
-                        // Charts Section
+                        // Charts Section (only for admin/technician)
                         if (_reportData != null) ...[
                           Text(
                             'Inventory Overview',
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 16),
-                          SizedBox(
+                          Container(
                             height: 300,
-                            child: SfCircularChart(
-                              title:
-                                  const ChartTitle(text: 'Chemical Categories'),
-                              legend: const Legend(isVisible: true),
-                              series: <CircularSeries>[
-                                PieSeries<_ChartData, String>(
-                                  dataSource: [
-                                    _ChartData(
-                                        'Expiring Soon',
-                                        _reportData!['expiringChemicals']
-                                            .length),
-                                    _ChartData(
-                                        'Low Stock',
-                                        _reportData!['lowStockChemicals']
-                                            .length),
-                                    _ChartData(
-                                        'Normal',
-                                        _reportData!['summary']
-                                                ['totalChemicals'] -
-                                            _reportData!['expiringChemicals']
-                                                .length -
-                                            _reportData!['lowStockChemicals']
-                                                .length),
-                                  ],
-                                  xValueMapper: (_ChartData data, _) => data.x,
-                                  yValueMapper: (_ChartData data, _) => data.y,
-                                  dataLabelSettings:
-                                      const DataLabelSettings(isVisible: true),
-                                )
-                              ],
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Charts functionality to be implemented',
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -308,6 +293,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 24),
                     Card(
+                      elevation: 4,
                       child: Padding(
                         padding: const EdgeInsets.all(24.0),
                         child: Column(
@@ -339,40 +325,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             const Text('• Submit borrowing requests'),
                             const Text('• View your request status'),
                             const SizedBox(height: 24),
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                // Navigate to chemicals screen
-                                Navigator.pushNamed(context, '/chemicals');
-                              },
-                              icon: const Icon(Icons.science),
-                              label: const Text('View Chemicals'),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const ChemicalsScreen(),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.science),
+                                label: const Text('View Chemicals'),
+                              ),
                             ),
                             const SizedBox(height: 12),
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                // Navigate to equipment screen
-                                Navigator.pushNamed(context, '/equipment');
-                              },
-                              icon: const Icon(Icons.build),
-                              label: const Text('View Equipment'),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const EquipmentScreen(),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.build),
+                                label: const Text('View Equipment'),
+                              ),
                             ),
                             const SizedBox(height: 12),
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                // Navigate to borrowings screen
-                                Navigator.pushNamed(context, '/borrowings');
-                              },
-                              icon: const Icon(Icons.assignment),
-                              label: const Text('My Requests'),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const BorrowingsScreen(),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.assignment),
+                                label: const Text('My Requests'),
+                              ),
                             ),
                             const SizedBox(height: 12),
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                // Navigate to borrowing form
-                                Navigator.pushNamed(context, '/borrowings/new');
-                              },
-                              icon: const Icon(Icons.add),
-                              label: const Text('Request Borrowing'),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const BorrowingFormScreen(),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.add),
+                                label: const Text('Request Borrowing'),
+                              ),
                             ),
                           ],
                         ),
@@ -463,6 +481,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+// ignore: unused_element
 class _ChartData {
   final String x;
   final int y;
