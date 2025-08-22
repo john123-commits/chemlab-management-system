@@ -1,4 +1,3 @@
-import 'package:chemlab_frontend/screens/borrowing_details_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
@@ -56,60 +55,84 @@ class _BorrowingsScreenState extends State<BorrowingsScreen> {
   Widget build(BuildContext context) {
     final userRole = Provider.of<AuthProvider>(context).userRole;
 
-    return RefreshIndicator(
-      onRefresh: _refreshBorrowings,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: DropdownButtonFormField<String>(
-              initialValue: _selectedStatus,
-              decoration: InputDecoration(
-                labelText: 'Status',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              items: const [
-                DropdownMenuItem(value: 'All', child: Text('All')),
-                DropdownMenuItem(value: 'pending', child: Text('Pending')),
-                DropdownMenuItem(value: 'approved', child: Text('Approved')),
-                DropdownMenuItem(value: 'rejected', child: Text('Rejected')),
-                DropdownMenuItem(value: 'returned', child: Text('Returned')),
-              ],
-              onChanged: (value) {
-                setState(() {
-                  _selectedStatus = value!;
-                  _loadBorrowings();
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Requests'),
+        actions: [
+          if (userRole != 'admin' && userRole != 'technician')
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const BorrowingFormScreen(),
+                  ),
+                ).then((result) {
+                  if (result == true) {
+                    _loadBorrowings();
+                  }
                 });
               },
             ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _borrowings.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.assignment_outlined,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No borrowings found',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey[600],
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshBorrowings,
+        child: Column(
+          children: [
+            // Status Filter
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: DropdownButtonFormField<String>(
+                initialValue: _selectedStatus,
+                decoration: InputDecoration(
+                  labelText: 'Status',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'All', child: Text('All')),
+                  DropdownMenuItem(value: 'pending', child: Text('Pending')),
+                  DropdownMenuItem(value: 'approved', child: Text('Approved')),
+                  DropdownMenuItem(value: 'rejected', child: Text('Rejected')),
+                  DropdownMenuItem(value: 'returned', child: Text('Returned')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _selectedStatus = value;
+                      _loadBorrowings();
+                    });
+                  }
+                },
+              ),
+            ),
+
+            // Borrowings List
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _borrowings.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.assignment_outlined,
+                                size: 64,
+                                color: Colors.grey[400],
                               ),
-                            ),
-                            // Only show request button for borrowers
-                            if (userRole != 'admin' && userRole != 'technician')
                               const SizedBox(height: 16),
-                            if (userRole != 'admin' && userRole != 'technician')
+                              Text(
+                                'No borrowings found',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
                               ElevatedButton(
                                 onPressed: () {
                                   Navigator.push(
@@ -118,107 +141,202 @@ class _BorrowingsScreenState extends State<BorrowingsScreen> {
                                       builder: (context) =>
                                           const BorrowingFormScreen(),
                                     ),
-                                  ).then((_) => _loadBorrowings());
+                                  ).then((result) {
+                                    if (result == true) {
+                                      _loadBorrowings();
+                                    }
+                                  });
                                 },
                                 child: const Text('Request Borrowing'),
                               ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _borrowings.length,
-                        itemBuilder: (context, index) {
-                          final borrowing = _borrowings[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            child: ListTile(
-                              title: Text(
-                                borrowing.purpose,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _borrowings.length,
+                          itemBuilder: (context, index) {
+                            final borrowing = _borrowings[index];
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Request Header
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            borrowing.purpose,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _getStatusColor(
+                                                borrowing.status),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            borrowing.status.toUpperCase(),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+
+                                    // Borrower Info (for admin/technician)
+                                    if (userRole == 'admin' ||
+                                        userRole == 'technician') ...[
+                                      Text(
+                                        'Borrower: ${borrowing.borrowerName}',
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                    ],
+
+                                    // Dates
+                                    Text(
+                                      'Visit: ${DateFormat('MMM dd, yyyy').format(borrowing.visitDate)} at ${borrowing.visitTime}',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Return: ${DateFormat('MMM dd, yyyy').format(borrowing.returnDate)}',
+                                      style: TextStyle(
+                                        color: borrowing.returnDate.compareTo(
+                                                        DateTime.now()) <
+                                                    0 &&
+                                                borrowing.status == 'approved'
+                                            ? Colors.red
+                                            : Colors.grey[600],
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+
+                                    // Chemicals List
+                                    if (borrowing.chemicals.isNotEmpty) ...[
+                                      const Text(
+                                        'Chemicals:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      ...borrowing.chemicals.map((chemical) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                              left: 8.0, bottom: 2.0),
+                                          child: Text(
+                                            '• ${chemical['name']} (${chemical['quantity']} ${chemical['unit']})',
+                                            style: TextStyle(
+                                              color: Colors.grey[700],
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                      const SizedBox(height: 8),
+                                    ],
+
+                                    // Equipment List
+                                    if (borrowing.equipment.isNotEmpty) ...[
+                                      const Text(
+                                        'Equipment:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      ...borrowing.equipment.map((equipment) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                              left: 8.0, bottom: 2.0),
+                                          child: Text(
+                                            '• ${equipment['name']} (Qty: ${equipment['quantity']})',
+                                            style: TextStyle(
+                                              color: Colors.grey[700],
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ],
+
+                                    // Notes (if any)
+                                    if (borrowing.notes != null &&
+                                        borrowing.notes!.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.yellow[50],
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                          border: Border.all(
+                                              color: Colors.yellow[200]!),
+                                        ),
+                                        child: Text(
+                                          'Notes: ${borrowing.notes}',
+                                          style: TextStyle(
+                                            color: Colors.grey[700],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Show borrower name only to admin/technician
-                                  if (userRole == 'admin' ||
-                                      userRole == 'technician')
-                                    Text('Borrower: ${borrowing.borrowerName}'),
-                                  Text('Status: ${borrowing.status}'),
-                                  Text(
-                                    'Visit: ${DateFormat('MMM dd, yyyy').format(borrowing.visitDate)} at ${borrowing.visitTime}',
-                                  ),
-                                  Text(
-                                    'Return: ${DateFormat('MMM dd, yyyy').format(borrowing.returnDate)}',
-                                    style: TextStyle(
-                                      color: borrowing.returnDate.compareTo(
-                                                      DateTime.now()) <
-                                                  0 &&
-                                              borrowing.status == 'approved'
-                                          ? Colors.red
-                                          : Colors.grey[600],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              trailing: Icon(
-                                borrowing.status == 'approved'
-                                    ? Icons.check_circle
-                                    : borrowing.status == 'rejected'
-                                        ? Icons.cancel
-                                        : borrowing.status == 'returned'
-                                            ? Icons.restore
-                                            : Icons.pending,
-                                color: borrowing.status == 'approved'
-                                    ? Colors.green
-                                    : borrowing.status == 'rejected'
-                                        ? Colors.red
-                                        : borrowing.status == 'returned'
-                                            ? Colors.blue
-                                            : Colors.orange,
-                              ),
-                              onTap: () {
-                                // Navigate to borrowing details screen
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        BorrowingDetailsScreen(
-                                            borrowing: borrowing),
-                                  ),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
-          ),
-          // Only show request button for borrowers
-          if (userRole != 'admin' && userRole != 'technician')
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const BorrowingFormScreen(),
-                    ),
-                  ).then((_) => _loadBorrowings());
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Request Borrowing'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
-              ),
+                            );
+                          },
+                        ),
             ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      case 'returned':
+        return Colors.blue;
+      case 'pending':
+      default:
+        return Colors.orange;
+    }
   }
 }
