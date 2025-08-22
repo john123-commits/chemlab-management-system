@@ -4,10 +4,26 @@ class Borrowing {
   static async create(borrowingData) {
     const { borrower_id, chemicals, equipment, purpose, research_details, borrow_date, return_date, visit_date, visit_time } = borrowingData;
     
+    // Ensure chemicals and equipment are properly formatted as JSON
+    const formattedChemicals = Array.isArray(chemicals) ? JSON.stringify(chemicals) : '[]';
+    const formattedEquipment = Array.isArray(equipment) ? JSON.stringify(equipment) : '[]';
+    
+    console.log('Creating borrowing with data:', {
+      borrower_id,
+      chemicals: formattedChemicals,
+      equipment: formattedEquipment,
+      purpose,
+      research_details,
+      borrow_date,
+      return_date,
+      visit_date,
+      visit_time
+    });
+    
     const result = await db.query(
       `INSERT INTO borrowings (borrower_id, chemicals, equipment, purpose, research_details, borrow_date, return_date, visit_date, visit_time, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending') RETURNING *`,
-      [borrower_id, chemicals, equipment, purpose, research_details, borrow_date, return_date, visit_date, visit_time]
+      [borrower_id, formattedChemicals, formattedEquipment, purpose, research_details, borrow_date, return_date, visit_date, visit_time]
     );
     
     return result.rows[0];
@@ -38,7 +54,15 @@ class Borrowing {
     query += ' ORDER BY b.created_at DESC';
 
     const result = await db.query(query, params);
-    return result.rows;
+    
+    // Parse JSON fields
+    const borrowings = result.rows.map(row => ({
+      ...row,
+      chemicals: typeof row.chemicals === 'string' ? JSON.parse(row.chemicals) : row.chemicals || [],
+      equipment: typeof row.equipment === 'string' ? JSON.parse(row.equipment) : row.equipment || []
+    }));
+    
+    return borrowings;
   }
 
   static async findById(id) {
@@ -49,7 +73,17 @@ class Borrowing {
        WHERE b.id = $1`,
       [id]
     );
-    return result.rows[0];
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const row = result.rows[0];
+    return {
+      ...row,
+      chemicals: typeof row.chemicals === 'string' ? JSON.parse(row.chemicals) : row.chemicals || [],
+      equipment: typeof row.equipment === 'string' ? JSON.parse(row.equipment) : row.equipment || []
+    };
   }
 
   static async updateStatus(id, status, notes = null) {
@@ -57,7 +91,17 @@ class Borrowing {
       'UPDATE borrowings SET status = $1, notes = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
       [status, notes, id]
     );
-    return result.rows[0];
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const row = result.rows[0];
+    return {
+      ...row,
+      chemicals: typeof row.chemicals === 'string' ? JSON.parse(row.chemicals) : row.chemicals || [],
+      equipment: typeof row.equipment === 'string' ? JSON.parse(row.equipment) : row.equipment || []
+    };
   }
 
   static async getOverdue() {
@@ -67,7 +111,15 @@ class Borrowing {
        JOIN users u ON b.borrower_id = u.id 
        WHERE b.status = 'approved' AND b.return_date < CURRENT_DATE`
     );
-    return result.rows;
+    
+    // Parse JSON fields
+    const overdueBorrowings = result.rows.map(row => ({
+      ...row,
+      chemicals: typeof row.chemicals === 'string' ? JSON.parse(row.chemicals) : row.chemicals || [],
+      equipment: typeof row.equipment === 'string' ? JSON.parse(row.equipment) : row.equipment || []
+    }));
+    
+    return overdueBorrowings;
   }
 }
 

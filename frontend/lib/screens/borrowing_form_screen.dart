@@ -3,6 +3,9 @@ import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/models/equipment.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
 import 'package:intl/intl.dart';
+import 'package:logger/logger.dart';
+
+var logger = Logger();
 
 class BorrowingFormScreen extends StatefulWidget {
   const BorrowingFormScreen({super.key});
@@ -57,7 +60,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
       _selectedChemicals.add({
         'id': chemical.id,
         'name': chemical.name,
-        'quantity': 1.0,
+        'quantity': 1.0, // Default quantity
         'unit': chemical.unit,
       });
     });
@@ -68,7 +71,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
       _selectedEquipment.add({
         'id': equipment.id,
         'name': equipment.name,
-        'quantity': 1,
+        'quantity': 1, // Default quantity
       });
     });
   }
@@ -82,6 +85,18 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
   void _removeEquipment(int index) {
     setState(() {
       _selectedEquipment.removeAt(index);
+    });
+  }
+
+  void _updateChemicalQuantity(int index, double quantity) {
+    setState(() {
+      _selectedChemicals[index]['quantity'] = quantity;
+    });
+  }
+
+  void _updateEquipmentQuantity(int index, int quantity) {
+    setState(() {
+      _selectedEquipment[index]['quantity'] = quantity;
     });
   }
 
@@ -104,6 +119,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
       setState(() => _isLoading = true);
 
       try {
+        // Format the data correctly for the API
         final borrowingData = {
           'chemicals': _selectedChemicals,
           'equipment': _selectedEquipment,
@@ -113,8 +129,10 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
           'return_date': DateFormat('yyyy-MM-dd').format(_returnDate!),
           'visit_date': DateFormat('yyyy-MM-dd').format(_visitDate!),
           'visit_time':
-              '${_visitTime.hour}:${_visitTime.minute.toString().padLeft(2, '0')}',
+              '${_visitTime.hour.toString().padLeft(2, '0')}:${_visitTime.minute.toString().padLeft(2, '0')}',
         };
+
+        logger.d('Sending borrowing data: $borrowingData'); // Debug log
 
         await ApiService.createBorrowing(borrowingData);
         if (!mounted) return;
@@ -125,12 +143,16 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
 
         Navigator.pop(context, true);
       } catch (error) {
+        logger.d('Error submitting borrowing request: $error'); // Debug log
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text('Failed to submit request: ${error.toString()}')),
         );
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
@@ -186,6 +208,8 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                       },
                     ),
                     const SizedBox(height: 24),
+
+                    // Chemicals Selection
                     Text(
                       'Select Chemicals',
                       style: Theme.of(context).textTheme.titleMedium,
@@ -227,6 +251,8 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                             ),
                     ),
                     const SizedBox(height: 16),
+
+                    // Selected Chemicals with Quantity
                     if (_selectedChemicals.isNotEmpty) ...[
                       Text(
                         'Selected Chemicals',
@@ -245,6 +271,34 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                             final chemical = entry.value;
                             return ListTile(
                               title: Text(chemical['name']),
+                              subtitle: Row(
+                                children: [
+                                  const Text('Quantity: '),
+                                  SizedBox(
+                                    width: 80,
+                                    child: TextFormField(
+                                      initialValue:
+                                          chemical['quantity'].toString(),
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                              decimal: true),
+                                      onChanged: (value) {
+                                        final quantity =
+                                            double.tryParse(value) ?? 1.0;
+                                        _updateChemicalQuantity(
+                                            index, quantity);
+                                      },
+                                      decoration: const InputDecoration(
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.all(8),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(chemical['unit']),
+                                ],
+                              ),
                               trailing: IconButton(
                                 icon: const Icon(Icons.remove_circle,
                                     color: Colors.red),
@@ -256,6 +310,8 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
+
+                    // Equipment Selection
                     Text(
                       'Select Equipment',
                       style: Theme.of(context).textTheme.titleMedium,
@@ -297,6 +353,8 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                             ),
                     ),
                     const SizedBox(height: 16),
+
+                    // Selected Equipment with Quantity
                     if (_selectedEquipment.isNotEmpty) ...[
                       Text(
                         'Selected Equipment',
@@ -315,6 +373,30 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                             final equipment = entry.value;
                             return ListTile(
                               title: Text(equipment['name']),
+                              subtitle: Row(
+                                children: [
+                                  const Text('Quantity: '),
+                                  SizedBox(
+                                    width: 80,
+                                    child: TextFormField(
+                                      initialValue:
+                                          equipment['quantity'].toString(),
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (value) {
+                                        final quantity =
+                                            int.tryParse(value) ?? 1;
+                                        _updateEquipmentQuantity(
+                                            index, quantity);
+                                      },
+                                      decoration: const InputDecoration(
+                                        border: OutlineInputBorder(),
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.all(8),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                               trailing: IconButton(
                                 icon: const Icon(Icons.remove_circle,
                                     color: Colors.red),
@@ -326,6 +408,8 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
+
+                    // Date Selection
                     ListTile(
                       title: const Text('Borrow Date'),
                       subtitle: Text(
@@ -342,7 +426,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                           lastDate:
                               DateTime.now().add(const Duration(days: 365)),
                         );
-                        if (pickedDate != null) {
+                        if (pickedDate != null && mounted) {
                           setState(() {
                             _borrowDate = pickedDate;
                           });
@@ -374,7 +458,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                           lastDate:
                               DateTime.now().add(const Duration(days: 365)),
                         );
-                        if (pickedDate != null) {
+                        if (pickedDate != null && mounted) {
                           setState(() {
                             _returnDate = pickedDate;
                           });
@@ -397,7 +481,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                           lastDate:
                               DateTime.now().add(const Duration(days: 365)),
                         );
-                        if (pickedDate != null) {
+                        if (pickedDate != null && mounted) {
                           setState(() {
                             _visitDate = pickedDate;
                           });
@@ -407,7 +491,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                     ListTile(
                       title: const Text('Visit Time'),
                       subtitle: Text(
-                        '${_visitTime.hour}:${_visitTime.minute.toString().padLeft(2, '0')}',
+                        '${_visitTime.hour.toString().padLeft(2, '0')}:${_visitTime.minute.toString().padLeft(2, '0')}',
                       ),
                       trailing: const Icon(Icons.access_time),
                       onTap: () async {
@@ -415,7 +499,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                           context: context,
                           initialTime: _visitTime,
                         );
-                        if (pickedTime != null) {
+                        if (pickedTime != null && mounted) {
                           setState(() {
                             _visitTime = pickedTime;
                           });
@@ -426,14 +510,16 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _submitForm,
+                        onPressed: _isLoading ? null : _submitForm,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                        child: const Text(
-                          'Submit Request',
-                          style: TextStyle(fontSize: 16),
-                        ),
+                        child: _isLoading
+                            ? const CircularProgressIndicator()
+                            : const Text(
+                                'Submit Request',
+                                style: TextStyle(fontSize: 16),
+                              ),
                       ),
                     ),
                   ],
