@@ -1,9 +1,9 @@
-import 'package:chemlab_frontend/screens/chemical_form_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
 import 'package:chemlab_frontend/screens/chemical_details_screen.dart';
+import 'package:chemlab_frontend/screens/chemical_form_screen.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:intl/intl.dart';
 
@@ -145,6 +145,36 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                                 color: Colors.grey[600],
                               ),
                             ),
+                            const SizedBox(height: 16),
+                            if (!isBorrower)
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const ChemicalFormScreen(),
+                                    ),
+                                  ).then((_) => _loadChemicals());
+                                },
+                                icon: const Icon(Icons.add),
+                                label: const Text('Add Chemical'),
+                              ),
+                            const SizedBox(height: 16),
+                            if (isBorrower)
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  // Go back to dashboard
+                                  Navigator.popUntil(
+                                      context, (route) => route.isFirst);
+                                },
+                                icon: const Icon(Icons.arrow_back),
+                                label: const Text('Back to Dashboard'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
                           ],
                         ),
                       )
@@ -196,9 +226,11 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                                   ? PopupMenuButton(
                                       itemBuilder: (context) => [
                                         const PopupMenuItem(
+                                          value: 'Edit',
                                           child: Text('Edit'),
                                         ),
                                         const PopupMenuItem(
+                                          value: 'Delete',
                                           child: Text('Delete'),
                                         ),
                                       ],
@@ -234,7 +266,25 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
                         },
                       ),
           ),
-          // Only show add button for admin/technician
+          // Back to dashboard button for borrowers
+          if (isBorrower && _filteredChemicals.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  // Go back to dashboard
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                },
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Back to Dashboard'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+              ),
+            ),
+          // Add button for admin/technician
           if (!isBorrower)
             Padding(
               padding: const EdgeInsets.all(16.0),
@@ -287,7 +337,7 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
           const SnackBar(content: Text('Chemical deleted successfully')),
         );
       } catch (error) {
-        if (!context.mounted) return;
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to delete chemical')),
         );

@@ -16,7 +16,9 @@ class EquipmentScreen extends StatefulWidget {
 
 class _EquipmentScreenState extends State<EquipmentScreen> {
   List<Equipment> _equipment = [];
+  List<Equipment> _filteredEquipment = [];
   bool _isLoading = true;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -29,6 +31,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       final equipment = await ApiService.getEquipment();
       setState(() {
         _equipment = equipment;
+        _filteredEquipment = equipment;
         _isLoading = false;
       });
     } catch (error) {
@@ -40,6 +43,20 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
         const SnackBar(content: Text('Failed to load equipment')),
       );
     }
+  }
+
+  void _filterEquipment() {
+    setState(() {
+      _filteredEquipment = _equipment.where((eq) {
+        final matchesSearch = _searchQuery.isEmpty ||
+            eq.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            eq.category.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            eq.condition.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            eq.location.toLowerCase().contains(_searchQuery.toLowerCase());
+
+        return matchesSearch;
+      }).toList();
+    });
   }
 
   Future<void> _refreshEquipment() async {
@@ -55,10 +72,27 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       onRefresh: _refreshEquipment,
       child: Column(
         children: [
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Search equipment...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onChanged: (value) {
+                _searchQuery = value;
+                _filterEquipment();
+              },
+            ),
+          ),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _equipment.isEmpty
+                : _filteredEquipment.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -76,13 +110,28 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                 color: Colors.grey[600],
                               ),
                             ),
+                            const SizedBox(height: 16),
+                            if (isBorrower)
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  // Go back to dashboard
+                                  Navigator.popUntil(
+                                      context, (route) => route.isFirst);
+                                },
+                                icon: const Icon(Icons.arrow_back),
+                                label: const Text('Back to Dashboard'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
                           ],
                         ),
                       )
                     : ListView.builder(
-                        itemCount: _equipment.length,
+                        itemCount: _filteredEquipment.length,
                         itemBuilder: (context, index) {
-                          final eq = _equipment[index];
+                          final eq = _filteredEquipment[index];
                           return Card(
                             margin: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -164,7 +213,25 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                         },
                       ),
           ),
-          // Only show add button for admin/technician
+          // Back to dashboard button for borrowers
+          if (isBorrower && _filteredEquipment.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  // Go back to dashboard
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                },
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Back to Dashboard'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+              ),
+            ),
+          // Add button for admin/technician
           if (!isBorrower)
             Padding(
               padding: const EdgeInsets.all(16.0),
