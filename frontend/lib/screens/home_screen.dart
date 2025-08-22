@@ -33,18 +33,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final userRole = Provider.of<AuthProvider>(context, listen: false).userRole;
 
     if (userRole == 'borrower') {
-      // Borrower screens
+      // Borrower screens - ONLY dashboard and borrowings
       _screens = [
         const DashboardScreen(),
-        const ChemicalsScreen(),
-        const EquipmentScreen(),
         const BorrowingsScreen(),
       ];
 
       _titles = [
         'Dashboard',
-        'Chemicals',
-        'Equipment',
         'My Requests',
       ];
 
@@ -54,20 +50,12 @@ class _HomeScreenState extends State<HomeScreen> {
           label: 'Dashboard',
         ),
         const BottomNavigationBarItem(
-          icon: Icon(Icons.science),
-          label: 'Chemicals',
-        ),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.build),
-          label: 'Equipment',
-        ),
-        const BottomNavigationBarItem(
           icon: Icon(Icons.assignment),
           label: 'My Requests',
         ),
       ];
-    } else {
-      // Admin/Technician screens
+    } else if (userRole == 'technician') {
+      // Technician screens - No users screen
       _screens = [
         const DashboardScreen(),
         const ChemicalsScreen(),
@@ -112,18 +100,58 @@ class _HomeScreenState extends State<HomeScreen> {
           label: 'Reports',
         ),
       ];
+    } else {
+      // Admin screens - All features
+      _screens = [
+        const DashboardScreen(),
+        const ChemicalsScreen(),
+        const EquipmentScreen(),
+        const BorrowingsScreen(),
+        const LectureSchedulesScreen(),
+        const ReportsScreen(),
+        const UsersScreen(), // Admin only
+      ];
 
-      // Add Users screen for admin
-      if (userRole == 'admin') {
-        _screens.add(const UsersScreen());
-        _titles.add('Users');
-        _navItems.add(
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.people),
-            label: 'Users',
-          ),
-        );
-      }
+      _titles = [
+        'Dashboard',
+        'Chemicals',
+        'Equipment',
+        'Borrowings',
+        'Lecture Schedules',
+        'Reports',
+        'Users',
+      ];
+
+      _navItems = [
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard),
+          label: 'Dashboard',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.science),
+          label: 'Chemicals',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.build),
+          label: 'Equipment',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.assignment),
+          label: 'Borrowings',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.calendar_today),
+          label: 'Lecture Schedules',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.bar_chart),
+          label: 'Reports',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.people),
+          label: 'Users',
+        ),
+      ];
     }
   }
 
@@ -136,8 +164,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
-    // ignore: unused_local_variable
-    final userRole = authProvider.userRole;
 
     // Update screens if role changes
     _updateScreens();
