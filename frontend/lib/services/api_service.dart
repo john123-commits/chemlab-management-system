@@ -305,7 +305,71 @@ class ApiService {
     }
   }
 
-// Lecture Schedule endpoints
+  // Enhanced borrowing status update with technician/admin support
+  static Future<Borrowing> updateBorrowingStatus(int id, String status,
+      {String? notes, String? rejectionReason}) async {
+    final token = await getAuthToken();
+
+    // Prepare the request body with all possible fields
+    final requestBody = {
+      'status': status,
+      if (notes != null) 'notes': notes,
+      if (rejectionReason != null && status == 'rejected')
+        'rejection_reason': rejectionReason,
+    };
+
+    logger.d('Updating borrowing status for ID: $id');
+    logger.d('Request body: $requestBody');
+
+    final response = await http.put(
+      Uri.parse('$baseUrl/borrowings/$id/status'),
+      headers: getHeaders(token),
+      body: jsonEncode(requestBody),
+    );
+
+    logger
+        .d('Update status response: ${response.statusCode} - ${response.body}');
+
+    if (response.statusCode == 200) {
+      return Borrowing.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Failed to update borrowing status: ${response.body}');
+    }
+  }
+
+  // Get pending requests count for dashboard alerts
+  static Future<int> getPendingRequestsCount() async {
+    final token = await getAuthToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/borrowings/pending/count'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['count'];
+    } else {
+      throw Exception('Failed to get pending requests count');
+    }
+  }
+
+  // Get pending requests for review
+  static Future<List<Borrowing>> getPendingRequests() async {
+    final token = await getAuthToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/borrowings/pending'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => Borrowing.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load pending requests');
+    }
+  }
+
+  // Lecture Schedule endpoints
   static Future<List<LectureSchedule>> getLectureSchedules(
       {String? status, String? date}) async {
     final token = await getAuthToken();
@@ -383,25 +447,6 @@ class ApiService {
 
     if (response.statusCode != 200) {
       throw Exception('Failed to delete lecture schedule');
-    }
-  }
-
-  static Future<Borrowing> updateBorrowingStatus(int id, String status,
-      {String? notes}) async {
-    final token = await getAuthToken();
-    final response = await http.put(
-      Uri.parse('$baseUrl/borrowings/$id/status'),
-      headers: getHeaders(token),
-      body: jsonEncode({
-        'status': status,
-        'notes': notes,
-      }),
-    );
-
-    if (response.statusCode == 200) {
-      return Borrowing.fromJson(jsonDecode(response.body));
-    } else {
-      throw Exception('Failed to update borrowing status: ${response.body}');
     }
   }
 

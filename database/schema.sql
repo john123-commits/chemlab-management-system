@@ -37,6 +37,8 @@ CREATE TABLE equipment (
 CREATE TABLE borrowings (
     id SERIAL PRIMARY KEY,
     borrower_id INTEGER REFERENCES users(id),
+    technician_id INTEGER REFERENCES users(id),
+    admin_id INTEGER REFERENCES users(id),
     chemicals JSONB,
     equipment JSONB,
     purpose TEXT NOT NULL,
@@ -47,10 +49,14 @@ CREATE TABLE borrowings (
     visit_time VARCHAR(10) NOT NULL,
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'returned')),
     notes TEXT,
+    rejection_reason TEXT,
+    technician_approved_at TIMESTAMP,
+    admin_approved_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Lecture Schedules table
 CREATE TABLE lecture_schedules (
     id SERIAL PRIMARY KEY,
     admin_id INTEGER REFERENCES users(id),
@@ -61,7 +67,7 @@ CREATE TABLE lecture_schedules (
     required_equipment JSONB,
     scheduled_date DATE NOT NULL,
     scheduled_time VARCHAR(10) NOT NULL,
-    duration INTEGER, -- in minutes
+    duration INTEGER,
     priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'in_progress', 'completed', 'cancelled')),
     technician_notes TEXT,
@@ -78,7 +84,35 @@ CREATE INDEX idx_equipment_maintenance ON equipment(last_maintenance_date);
 CREATE INDEX idx_borrowings_status ON borrowings(status);
 CREATE INDEX idx_borrowings_borrower ON borrowings(borrower_id);
 CREATE INDEX idx_borrowings_dates ON borrowings(borrow_date, return_date);
+CREATE INDEX idx_borrowings_technician ON borrowings(technician_id);
+CREATE INDEX idx_borrowings_admin ON borrowings(admin_id);
+CREATE INDEX idx_borrowings_pending ON borrowings(status) WHERE status = 'pending';
+CREATE INDEX idx_borrowings_overdue ON borrowings(status, return_date) 
+WHERE status = 'approved' AND return_date < CURRENT_DATE;
 CREATE INDEX idx_lecture_schedules_admin ON lecture_schedules(admin_id);
 CREATE INDEX idx_lecture_schedules_technician ON lecture_schedules(technician_id);
 CREATE INDEX idx_lecture_schedules_date ON lecture_schedules(scheduled_date);
 CREATE INDEX idx_lecture_schedules_status ON lecture_schedules(status);
+
+-- Create a function to automatically update the updated_at field
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Create triggers for automatic timestamp updates
+CREATE TRIGGER update_borrowings_updated_at 
+    BEFORE UPDATE ON borrowings 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_lecture_schedules_updated_at 
+    BEFORE UPDATE ON lecture_schedules 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Update existing records to have default values
+UPDATE borrowings SET status = 'pending' WHERE status IS NULL;

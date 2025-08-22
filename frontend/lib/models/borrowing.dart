@@ -3,6 +3,12 @@ class Borrowing {
   final int borrowerId;
   final String borrowerName;
   final String borrowerEmail;
+  final int? technicianId;
+  final String? technicianName;
+  final DateTime? technicianApprovedAt;
+  final int? adminId;
+  final String? adminName;
+  final DateTime? adminApprovedAt;
   final List<dynamic> chemicals;
   final List<dynamic> equipment;
   final String purpose;
@@ -13,6 +19,7 @@ class Borrowing {
   final String visitTime;
   final String status;
   final String? notes;
+  final String? rejectionReason;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -21,6 +28,12 @@ class Borrowing {
     required this.borrowerId,
     required this.borrowerName,
     required this.borrowerEmail,
+    this.technicianId,
+    this.technicianName,
+    this.technicianApprovedAt,
+    this.adminId,
+    this.adminName,
+    this.adminApprovedAt,
     required this.chemicals,
     required this.equipment,
     required this.purpose,
@@ -31,6 +44,7 @@ class Borrowing {
     required this.visitTime,
     required this.status,
     this.notes,
+    this.rejectionReason,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -41,6 +55,16 @@ class Borrowing {
       borrowerId: json['borrower_id'],
       borrowerName: json['borrower_name'] ?? '',
       borrowerEmail: json['borrower_email'] ?? '',
+      technicianId: json['technician_id'],
+      technicianName: json['technician_name'],
+      technicianApprovedAt: json['technician_approved_at'] != null
+          ? DateTime.parse(json['technician_approved_at'])
+          : null,
+      adminId: json['admin_id'],
+      adminName: json['admin_name'],
+      adminApprovedAt: json['admin_approved_at'] != null
+          ? DateTime.parse(json['admin_approved_at'])
+          : null,
       chemicals: json['chemicals'] ?? [],
       equipment: json['equipment'] ?? [],
       purpose: json['purpose'],
@@ -51,6 +75,7 @@ class Borrowing {
       visitTime: json['visit_time'],
       status: json['status'],
       notes: json['notes'],
+      rejectionReason: json['rejection_reason'],
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at'] ?? json['created_at']),
     );
@@ -62,6 +87,12 @@ class Borrowing {
       'borrower_id': borrowerId,
       'borrower_name': borrowerName,
       'borrower_email': borrowerEmail,
+      'technician_id': technicianId,
+      'technician_name': technicianName,
+      'technician_approved_at': technicianApprovedAt?.toIso8601String(),
+      'admin_id': adminId,
+      'admin_name': adminName,
+      'admin_approved_at': adminApprovedAt?.toIso8601String(),
       'chemicals': chemicals,
       'equipment': equipment,
       'purpose': purpose,
@@ -72,6 +103,7 @@ class Borrowing {
       'visit_time': visitTime,
       'status': status,
       'notes': notes,
+      'rejection_reason': rejectionReason,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
