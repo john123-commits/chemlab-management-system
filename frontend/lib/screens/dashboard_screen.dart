@@ -10,6 +10,9 @@ import 'package:chemlab_frontend/screens/chemicals_screen.dart';
 import 'package:chemlab_frontend/screens/equipment_screen.dart';
 import 'package:chemlab_frontend/screens/borrowings_screen.dart';
 import 'package:chemlab_frontend/screens/borrowing_form_screen.dart';
+import 'package:logger/logger.dart';
+
+var logger = Logger();
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -47,6 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             });
           }
         } catch (alertError) {
+          logger.d('Alerts loading error (borrower): $alertError');
           if (mounted) {
             setState(() {
               _alerts = [];
@@ -57,32 +61,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
       // For technicians and admins - staff dashboard
       else {
-        // Load dashboard data for staff
-        final report = await ApiService.getMonthlyReport();
-        final alerts = await ApiService.getAlerts();
-        final pendingCount = await ApiService.getPendingRequestsCount();
+        try {
+          // Load all data concurrently to improve performance and isolate errors
+          final futureReport = ApiService.getMonthlyReport();
+          final futureAlerts = ApiService.getAlerts();
+          final futurePendingCount = ApiService.getPendingRequestsCount();
 
-        if (mounted) {
-          setState(() {
-            _reportData = report;
-            _alerts = alerts;
-            _pendingRequestsCount = pendingCount;
-            _isLoading = false;
-          });
+          // Wait for all to complete (errors won't stop others)
+          Map<String, dynamic>? reportData;
+          List<dynamic>? alertsData;
+          int pendingCount = 0;
+
+          try {
+            reportData = await futureReport;
+          } catch (reportError) {
+            logger.d('Report loading error (continuing): $reportError');
+            // Continue without report data
+          }
+
+          try {
+            alertsData = await futureAlerts;
+          } catch (alertError) {
+            logger.d('Alerts loading error (continuing): $alertError');
+            alertsData = [];
+          }
+
+          try {
+            pendingCount = await futurePendingCount;
+          } catch (pendingError) {
+            logger.d('Pending count loading error (continuing): $pendingError');
+            pendingCount = 0; // Default to 0 if error
+          }
+
+          if (mounted) {
+            setState(() {
+              _reportData = reportData;
+              _alerts = alertsData;
+              _pendingRequestsCount = pendingCount;
+              _isLoading = false;
+            });
+          }
+        } catch (overallError) {
+          logger.d('Overall dashboard loading error: $overallError');
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              // Don't set error message to prevent UI blocking
+            });
+          }
         }
       }
     } catch (error) {
+      logger.d('Critical dashboard error: $error');
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = error.toString();
+          // Even on critical error, try to show basic dashboard
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text('Failed to load dashboard data: ${error.toString()}')),
-        );
       }
     }
   }

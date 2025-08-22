@@ -281,11 +281,21 @@ class ApiService {
       headers: getHeaders(token),
     );
 
+    logger.d('Borrowings request to: $baseUrl/borrowings$queryParams');
+    logger.d('Borrowings response status: ${response.statusCode}');
+    logger.d('Borrowings response body: ${response.body}');
+
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
       return data.map((json) => Borrowing.fromJson(json)).toList();
+    } else if (response.statusCode == 403) {
+      throw Exception(
+          'Permission denied: You do not have access to borrowings');
+    } else if (response.statusCode == 401) {
+      throw Exception('Authentication required: Please log in again');
     } else {
-      throw Exception('Failed to load borrowings');
+      throw Exception(
+          'Failed to load borrowings (Status: ${response.statusCode}): ${response.body}');
     }
   }
 
@@ -369,7 +379,7 @@ class ApiService {
     }
   }
 
-  // Lecture Schedule endpoints
+  // Lecture Schedule endpoints - FIXED VERSION
   static Future<List<LectureSchedule>> getLectureSchedules(
       {String? status, String? date}) async {
     final token = await getAuthToken();
@@ -406,18 +416,42 @@ class ApiService {
     }
   }
 
+  // ✅ FIXED createLectureSchedule method with proper JSON handling
   static Future<LectureSchedule> createLectureSchedule(
       Map<String, dynamic> scheduleData) async {
     final token = await getAuthToken();
+
+    // Ensure arrays are properly formatted as JSON
+    final formattedData = {
+      ...scheduleData,
+      'required_chemicals': scheduleData['required_chemicals'] != null
+          ? jsonEncode(scheduleData['required_chemicals'])
+          : '[]',
+      'required_equipment': scheduleData['required_equipment'] != null
+          ? jsonEncode(scheduleData['required_equipment'])
+          : '[]',
+    };
+
+    logger.d('=== API SERVICE CREATE LECTURE SCHEDULE ===');
+    logger.d('Original schedule data: $scheduleData');
+    logger.d('Formatted schedule data: $formattedData');
+
     final response = await http.post(
       Uri.parse('$baseUrl/lecture-schedules'),
       headers: getHeaders(token),
-      body: jsonEncode(scheduleData),
+      body: jsonEncode(formattedData), // Send properly formatted data
     );
 
+    logger.d('API Response Status: ${response.statusCode}');
+    logger.d('API Response Body: ${response.body}');
+
     if (response.statusCode == 201) {
-      return LectureSchedule.fromJson(jsonDecode(response.body));
+      final responseData = jsonDecode(response.body);
+      logger.d('Lecture schedule creation successful, response: $responseData');
+      return LectureSchedule.fromJson(responseData);
     } else {
+      logger.e(
+          'Lecture schedule creation failed with status ${response.statusCode}: ${response.body}');
       throw Exception('Failed to create lecture schedule: ${response.body}');
     }
   }
@@ -425,10 +459,22 @@ class ApiService {
   static Future<LectureSchedule> updateLectureSchedule(
       int id, Map<String, dynamic> updateData) async {
     final token = await getAuthToken();
+
+    // Ensure arrays are properly formatted as JSON
+    final formattedData = {
+      ...updateData,
+      'required_chemicals': updateData['required_chemicals'] != null
+          ? jsonEncode(updateData['required_chemicals'])
+          : '[]',
+      'required_equipment': updateData['required_equipment'] != null
+          ? jsonEncode(updateData['required_equipment'])
+          : '[]',
+    };
+
     final response = await http.put(
       Uri.parse('$baseUrl/lecture-schedules/$id'),
       headers: getHeaders(token),
-      body: jsonEncode(updateData),
+      body: jsonEncode(formattedData),
     );
 
     if (response.statusCode == 200) {

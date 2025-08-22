@@ -18,6 +18,17 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _purposeController = TextEditingController();
   final _researchDetailsController = TextEditingController();
+
+  // Add controllers for student information
+  final _universityController = TextEditingController();
+  final _educationLevelController = TextEditingController();
+  final _registrationNumberController = TextEditingController();
+  final _studentNumberController = TextEditingController();
+  final _currentYearController = TextEditingController();
+  final _semesterController = TextEditingController();
+  final _borrowerEmailController = TextEditingController();
+  final _borrowerContactController = TextEditingController();
+
   List<Chemical> _availableChemicals = [];
   List<Equipment> _availableEquipment = [];
   final List<Map<String, dynamic>> _selectedChemicals = [];
@@ -60,7 +71,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
       _selectedChemicals.add({
         'id': chemical.id,
         'name': chemical.name,
-        'quantity': 1.0, // Default quantity
+        'quantity': 1.0,
         'unit': chemical.unit,
       });
     });
@@ -71,7 +82,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
       _selectedEquipment.add({
         'id': equipment.id,
         'name': equipment.name,
-        'quantity': 1, // Default quantity
+        'quantity': 1,
       });
     });
   }
@@ -130,6 +141,15 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
           'visit_date': DateFormat('yyyy-MM-dd').format(_visitDate!),
           'visit_time':
               '${_visitTime.hour.toString().padLeft(2, '0')}:${_visitTime.minute.toString().padLeft(2, '0')}',
+          // Add student information
+          'university': _universityController.text.trim(),
+          'education_level': _educationLevelController.text.trim(),
+          'registration_number': _registrationNumberController.text.trim(),
+          'student_number': _studentNumberController.text.trim(),
+          'current_year': int.tryParse(_currentYearController.text.trim()) ?? 1,
+          'semester': _semesterController.text.trim(),
+          'borrower_email': _borrowerEmailController.text.trim(),
+          'borrower_contact': _borrowerContactController.text.trim(),
         };
 
         logger.d('Sending borrowing data: $borrowingData'); // Debug log
@@ -161,6 +181,15 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
   void dispose() {
     _purposeController.dispose();
     _researchDetailsController.dispose();
+    // Dispose student information controllers
+    _universityController.dispose();
+    _educationLevelController.dispose();
+    _registrationNumberController.dispose();
+    _studentNumberController.dispose();
+    _currentYearController.dispose();
+    _semesterController.dispose();
+    _borrowerEmailController.dispose();
+    _borrowerContactController.dispose();
     super.dispose();
   }
 
@@ -179,11 +208,172 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Student Information Section
+                    Text(
+                      'Student Information',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _universityController,
+                      decoration: const InputDecoration(
+                        labelText: 'University *',
+                        border: OutlineInputBorder(),
+                        hintText: 'Enter your university name',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter university name';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _educationLevelController,
+                      decoration: const InputDecoration(
+                        labelText: 'Current Level of Education *',
+                        border: OutlineInputBorder(),
+                        hintText: 'e.g., Bachelor\'s, Master\'s, PhD',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter current level of education';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _registrationNumberController,
+                      decoration: const InputDecoration(
+                        labelText: 'Registration Number and Name *',
+                        border: OutlineInputBorder(),
+                        hintText: 'Enter your registration number',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter registration number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _studentNumberController,
+                      decoration: const InputDecoration(
+                        labelText: 'Student Number *',
+                        border: OutlineInputBorder(),
+                        hintText: 'Enter your student number',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter student number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _currentYearController,
+                      decoration: const InputDecoration(
+                        labelText: 'Current Year *',
+                        border: OutlineInputBorder(),
+                        hintText:
+                            'Enter current academic year (e.g., 1, 2, 3, 4)',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter current year';
+                        }
+                        if (int.tryParse(value) == null) {
+                          return 'Please enter a valid number';
+                        }
+                        final year = int.tryParse(value)!;
+                        if (year < 1 || year > 10) {
+                          return 'Please enter a valid year (1-10)';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _semesterController,
+                      decoration: const InputDecoration(
+                        labelText: 'Semester *',
+                        border: OutlineInputBorder(),
+                        hintText:
+                            'Enter current semester (e.g., Semester 1, Spring 2024)',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter semester';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _borrowerEmailController,
+                      decoration: const InputDecoration(
+                        labelText: 'Email *',
+                        border: OutlineInputBorder(),
+                        hintText: 'Enter your email address',
+                      ),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter email';
+                        }
+                        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                          return 'Please enter a valid email';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    TextFormField(
+                      controller: _borrowerContactController,
+                      decoration: const InputDecoration(
+                        labelText: 'Contact Number *',
+                        border: OutlineInputBorder(),
+                        hintText: 'Enter your phone number',
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter contact number';
+                        }
+                        if (value.length < 10) {
+                          return 'Please enter a valid phone number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Purpose and Research Details
+                    Text(
+                      'Borrowing Details',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 16),
+
                     TextFormField(
                       controller: _purposeController,
                       decoration: const InputDecoration(
-                        labelText: 'Purpose',
+                        labelText: 'Purpose *',
                         border: OutlineInputBorder(),
+                        hintText: 'Briefly describe the purpose of borrowing',
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -193,13 +383,16 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
+
                     TextFormField(
                       controller: _researchDetailsController,
                       decoration: const InputDecoration(
-                        labelText: 'Research Details',
+                        labelText: 'Research Details *',
                         border: OutlineInputBorder(),
+                        hintText:
+                            'Provide detailed information about your research',
                       ),
-                      maxLines: 3,
+                      maxLines: 4,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Please enter research details';
@@ -212,7 +405,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                     // Chemicals Selection
                     Text(
                       'Select Chemicals',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -256,7 +449,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                     if (_selectedChemicals.isNotEmpty) ...[
                       Text(
                         'Selected Chemicals',
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       const SizedBox(height: 8),
                       Container(
@@ -314,7 +507,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                     // Equipment Selection
                     Text(
                       'Select Equipment',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -358,7 +551,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                     if (_selectedEquipment.isNotEmpty) ...[
                       Text(
                         'Selected Equipment',
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       const SizedBox(height: 8),
                       Container(
@@ -410,8 +603,13 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                     ],
 
                     // Date Selection
+                    Text(
+                      'Schedule Details',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
                     ListTile(
-                      title: const Text('Borrow Date'),
+                      title: const Text('Borrow Date *'),
                       subtitle: Text(
                         _borrowDate == null
                             ? 'Select date'
@@ -434,7 +632,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                       },
                     ),
                     ListTile(
-                      title: const Text('Return Date'),
+                      title: const Text('Return Date *'),
                       subtitle: Text(
                         _returnDate == null
                             ? 'Select date'
@@ -466,7 +664,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                       },
                     ),
                     ListTile(
-                      title: const Text('Visit Date'),
+                      title: const Text('Visit Date *'),
                       subtitle: Text(
                         _visitDate == null
                             ? 'Select date'
@@ -489,7 +687,7 @@ class _BorrowingFormScreenState extends State<BorrowingFormScreen> {
                       },
                     ),
                     ListTile(
-                      title: const Text('Visit Time'),
+                      title: const Text('Visit Time *'),
                       subtitle: Text(
                         '${_visitTime.hour.toString().padLeft(2, '0')}:${_visitTime.minute.toString().padLeft(2, '0')}',
                       ),

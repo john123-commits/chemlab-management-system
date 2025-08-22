@@ -1,7 +1,10 @@
+import 'dart:convert';
+import 'package:intl/intl.dart';
+
 class LectureSchedule {
   final int id;
-  final int adminId;
-  final int technicianId;
+  final int? adminId;
+  final int? technicianId;
   final String title;
   final String description;
   final List<dynamic> requiredChemicals;
@@ -15,13 +18,15 @@ class LectureSchedule {
   final DateTime? confirmationDate;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final String adminName;
-  final String technicianName;
+  final String? adminName;
+  final String? technicianName;
+  final String? adminEmail;
+  final String? technicianEmail;
 
   LectureSchedule({
     required this.id,
-    required this.adminId,
-    required this.technicianId,
+    this.adminId,
+    this.technicianId,
     required this.title,
     required this.description,
     required this.requiredChemicals,
@@ -35,32 +40,86 @@ class LectureSchedule {
     this.confirmationDate,
     required this.createdAt,
     required this.updatedAt,
-    required this.adminName,
-    required this.technicianName,
+    this.adminName,
+    this.technicianName,
+    this.adminEmail,
+    this.technicianEmail,
   });
 
   factory LectureSchedule.fromJson(Map<String, dynamic> json) {
+    // Safely parse required chemicals
+    List<dynamic> chemicals = [];
+    if (json['required_chemicals'] != null) {
+      try {
+        if (json['required_chemicals'] is String) {
+          chemicals = jsonDecode(json['required_chemicals']);
+        } else if (json['required_chemicals'] is List) {
+          chemicals = json['required_chemicals'];
+        }
+      } catch (e) {
+        chemicals = [];
+      }
+    }
+
+    // Safely parse required equipment
+    List<dynamic> equipment = [];
+    if (json['required_equipment'] != null) {
+      try {
+        if (json['required_equipment'] is String) {
+          equipment = jsonDecode(json['required_equipment']);
+        } else if (json['required_equipment'] is List) {
+          equipment = json['required_equipment'];
+        }
+      } catch (e) {
+        equipment = [];
+      }
+    }
+
     return LectureSchedule(
-      id: json['id'] as int? ?? 0,
-      adminId: json['admin_id'] as int? ?? 0,
-      technicianId: json['technician_id'] as int? ?? 0,
-      title: json['title'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      requiredChemicals: json['required_chemicals'] ?? [],
-      requiredEquipment: json['required_equipment'] ?? [],
-      scheduledDate: DateTime.parse(json['scheduled_date']),
-      scheduledTime: json['scheduled_time'] as String? ?? '00:00',
-      duration: json['duration'] as int?,
-      priority: json['priority'] as String? ?? 'normal',
-      status: json['status'] as String? ?? 'pending',
-      technicianNotes: json['technician_notes'] as String?,
+      id: json['id'] is int ? json['id'] : 0,
+      adminId: json['admin_id'] is int ? json['admin_id'] : null,
+      technicianId: json['technician_id'] is int ? json['technician_id'] : null,
+      title: json['title'] is String ? json['title'] : '',
+      description: json['description'] is String ? json['description'] : '',
+      requiredChemicals: chemicals,
+      requiredEquipment: equipment,
+      scheduledDate: json['scheduled_date'] != null
+          ? DateTime.parse(json['scheduled_date'] is String
+              ? json['scheduled_date']
+              : json['scheduled_date'].toString())
+          : DateTime.now(),
+      scheduledTime:
+          json['scheduled_time'] is String ? json['scheduled_time'] : '00:00',
+      duration: json['duration'] is int
+          ? json['duration']
+          : (json['duration'] is String
+              ? int.tryParse(json['duration'])
+              : null),
+      priority: json['priority'] is String ? json['priority'] : 'normal',
+      status: json['status'] is String ? json['status'] : 'pending',
+      technicianNotes:
+          json['technician_notes'] is String ? json['technician_notes'] : null,
       confirmationDate: json['confirmation_date'] != null
-          ? DateTime.parse(json['confirmation_date'])
+          ? DateTime.parse(json['confirmation_date'] is String
+              ? json['confirmation_date']
+              : json['confirmation_date'].toString())
           : null,
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
-      adminName: json['admin_name'] as String? ?? 'Unknown',
-      technicianName: json['technician_name'] as String? ?? 'Unknown',
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] is String
+              ? json['created_at']
+              : json['created_at'].toString())
+          : DateTime.now(),
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] is String
+              ? json['updated_at']
+              : json['updated_at'].toString())
+          : DateTime.now(),
+      adminName: json['admin_name'] is String ? json['admin_name'] : null,
+      technicianName:
+          json['technician_name'] is String ? json['technician_name'] : null,
+      adminEmail: json['admin_email'] is String ? json['admin_email'] : null,
+      technicianEmail:
+          json['technician_email'] is String ? json['technician_email'] : null,
     );
   }
 
@@ -71,9 +130,10 @@ class LectureSchedule {
       'technician_id': technicianId,
       'title': title,
       'description': description,
-      'required_chemicals': requiredChemicals,
-      'required_equipment': requiredEquipment,
-      'scheduled_date': scheduledDate.toIso8601String().split('T')[0],
+      // ✅ FIX: Properly encode arrays as JSON strings
+      'required_chemicals': jsonEncode(requiredChemicals),
+      'required_equipment': jsonEncode(requiredEquipment),
+      'scheduled_date': DateFormat('yyyy-MM-dd').format(scheduledDate),
       'scheduled_time': scheduledTime,
       'duration': duration,
       'priority': priority,
@@ -84,6 +144,8 @@ class LectureSchedule {
       'updated_at': updatedAt.toIso8601String(),
       'admin_name': adminName,
       'technician_name': technicianName,
+      'admin_email': adminEmail,
+      'technician_email': technicianEmail,
     };
   }
 }

@@ -10,18 +10,80 @@ const router = express.Router();
 // Get monthly report
 router.get('/monthly', authenticateToken, requireAdminOrTechnician, async (req, res) => {
   try {
-    const expiringChemicals = await Chemical.getExpiringSoon();
-    const lowStockChemicals = await Chemical.getLowStock();
-    const dueEquipment = await Equipment.getDueForMaintenance();
-    const overdueBorrowings = await Borrowing.getOverdue();
+    console.log('Generating monthly report for user:', req.user);
+    
+    // Safely get data with error handling
+    let expiringChemicals = [];
+    let lowStockChemicals = [];
+    let dueEquipment = [];
+    let overdueBorrowings = [];
+    
+    try {
+      expiringChemicals = await Chemical.getExpiringSoon();
+      console.log('Found expiring chemicals:', expiringChemicals.length);
+    } catch (error) {
+      console.warn('Could not get expiring chemicals:', error.message);
+    }
+    
+    try {
+      lowStockChemicals = await Chemical.getLowStock();
+      console.log('Found low stock chemicals:', lowStockChemicals.length);
+    } catch (error) {
+      console.warn('Could not get low stock chemicals:', error.message);
+    }
+    
+    try {
+      dueEquipment = await Equipment.getDueForMaintenance();
+      console.log('Found due equipment:', dueEquipment.length);
+    } catch (error) {
+      console.warn('Could not get due equipment:', error.message);
+    }
+    
+    try {
+      overdueBorrowings = await Borrowing.getOverdue();
+      console.log('Found overdue borrowings:', overdueBorrowings.length);
+    } catch (error) {
+      console.warn('Could not get overdue borrowings:', error.message);
+    }
+    
+    // Get counts safely
+    let totalChemicals = 0;
+    let totalEquipment = 0;
+    let activeBorrowings = 0;
+    let pendingBorrowings = 0;
+    let overdueBorrowingsCount = overdueBorrowings.length;
+    
+    try {
+      totalChemicals = (await Chemical.findAll()).length;
+    } catch (error) {
+      console.warn('Could not get total chemicals count:', error.message);
+    }
+    
+    try {
+      totalEquipment = (await Equipment.findAll()).length;
+    } catch (error) {
+      console.warn('Could not get total equipment count:', error.message);
+    }
+    
+    try {
+      activeBorrowings = (await Borrowing.findAll({ status: 'approved' })).length;
+    } catch (error) {
+      console.warn('Could not get active borrowings count:', error.message);
+    }
+    
+    try {
+      pendingBorrowings = (await Borrowing.findAll({ status: 'pending' })).length;
+    } catch (error) {
+      console.warn('Could not get pending borrowings count:', error.message);
+    }
     
     const report = {
       summary: {
-        totalChemicals: (await Chemical.findAll()).length,
-        totalEquipment: (await Equipment.findAll()).length,
-        activeBorrowings: (await Borrowing.findAll({ status: 'approved' })).length,
-        pendingBorrowings: (await Borrowing.findAll({ status: 'pending' })).length,
-        overdueBorrowings: overdueBorrowings.length
+        totalChemicals: totalChemicals,
+        totalEquipment: totalEquipment,
+        activeBorrowings: activeBorrowings,
+        pendingBorrowings: pendingBorrowings,
+        overdueBorrowings: overdueBorrowingsCount
       },
       expiringChemicals,
       lowStockChemicals,
@@ -29,9 +91,11 @@ router.get('/monthly', authenticateToken, requireAdminOrTechnician, async (req, 
       overdueBorrowings
     };
     
+    console.log('Monthly report generated successfully');
     res.json(report);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error generating monthly report:', error);
+    res.status(500).json({ error: 'Failed to generate report: ' + error.message });
   }
 });
 

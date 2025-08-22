@@ -23,6 +23,16 @@ class Borrowing {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  // Add student information fields
+  final String? university;
+  final String? educationLevel;
+  final String? registrationNumber;
+  final String? studentNumber;
+  final int? currentYear;
+  final String? semester;
+  final String? borrowerEmailContact;
+  final String? borrowerContact;
+
   Borrowing({
     required this.id,
     required this.borrowerId,
@@ -47,6 +57,15 @@ class Borrowing {
     this.rejectionReason,
     required this.createdAt,
     required this.updatedAt,
+    // Add student information fields
+    this.university,
+    this.educationLevel,
+    this.registrationNumber,
+    this.studentNumber,
+    this.currentYear,
+    this.semester,
+    this.borrowerEmailContact,
+    this.borrowerContact,
   });
 
   factory Borrowing.fromJson(Map<String, dynamic> json) {
@@ -78,6 +97,15 @@ class Borrowing {
       rejectionReason: json['rejection_reason'],
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at'] ?? json['created_at']),
+      // Add student information fields
+      university: json['university'],
+      educationLevel: json['education_level'],
+      registrationNumber: json['registration_number'],
+      studentNumber: json['student_number'],
+      currentYear: json['current_year'],
+      semester: json['semester'],
+      borrowerEmailContact: json['borrower_email'],
+      borrowerContact: json['borrower_contact'],
     );
   }
 
@@ -106,6 +134,16 @@ class Borrowing {
       'rejection_reason': rejectionReason,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      // Add student information fields
+      'university': university,
+      'education_level': educationLevel,
+      'registration_number': registrationNumber,
+      'student_number': studentNumber,
+      'current_year': currentYear,
+      'semester': semester,
+      // ignore: equal_keys_in_map
+      'borrower_email': borrowerEmailContact,
+      'borrower_contact': borrowerContact,
     };
   }
 }
