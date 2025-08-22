@@ -38,9 +38,6 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
   }
 
   Future<void> _updateStatus(String status) async {
-    // ignore: unused_local_variable
-    final userRole = Provider.of<AuthProvider>(context, listen: false).userRole;
-
     setState(() => _isLoading = true);
 
     try {
@@ -80,6 +77,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
   Widget build(BuildContext context) {
     final userRole = Provider.of<AuthProvider>(context).userRole;
     final borrowing = widget.borrowing;
+    final isStaff = userRole == 'admin' || userRole == 'technician';
 
     return Scaffold(
       appBar: AppBar(
@@ -90,7 +88,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Status Card
+            // Request Header Card
             Card(
               elevation: 4,
               child: Padding(
@@ -101,9 +99,11 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          borrowing.purpose,
-                          style: Theme.of(context).textTheme.headlineSmall,
+                        Expanded(
+                          child: Text(
+                            borrowing.purpose,
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -125,10 +125,11 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    if (userRole == 'admin' || userRole == 'technician')
+                    if (isStaff) ...[
                       Text('Borrower: ${borrowing.borrowerName}'),
-                    Text('Email: ${borrowing.borrowerEmail}'),
-                    const SizedBox(height: 8),
+                      Text('Email: ${borrowing.borrowerEmail}'),
+                      const SizedBox(height: 8),
+                    ],
                     Text(
                       'Visit: ${DateFormat('MMM dd, yyyy').format(borrowing.visitDate)} at ${borrowing.visitTime}',
                     ),
@@ -145,9 +146,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                       Text(
                         'Technician Approved: ${borrowing.technicianName}',
                         style: const TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            color: Colors.green, fontWeight: FontWeight.bold),
                       ),
                       if (borrowing.technicianApprovedAt != null)
                         Text(
@@ -160,9 +159,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                       Text(
                         'Admin Approved: ${borrowing.adminName}',
                         style: const TextStyle(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            color: Colors.blue, fontWeight: FontWeight.bold),
                       ),
                       if (borrowing.adminApprovedAt != null)
                         Text(
@@ -176,11 +173,57 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
             ),
             const SizedBox(height: 24),
 
+            // Student Information Section (ONLY for admin/technician)
+            if (isStaff) ...[
+              Text(
+                'Student Information',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildStudentInfoRow(
+                          'University', borrowing.university ?? 'Not provided'),
+                      const SizedBox(height: 12),
+                      _buildStudentInfoRow('Education Level',
+                          borrowing.educationLevel ?? 'Not provided'),
+                      const SizedBox(height: 12),
+                      _buildStudentInfoRow('Registration Number',
+                          borrowing.registrationNumber ?? 'Not provided'),
+                      const SizedBox(height: 12),
+                      _buildStudentInfoRow('Student Number',
+                          borrowing.studentNumber ?? 'Not provided'),
+                      const SizedBox(height: 12),
+                      _buildStudentInfoRow('Current Year',
+                          borrowing.currentYear?.toString() ?? 'Not provided'),
+                      const SizedBox(height: 12),
+                      _buildStudentInfoRow(
+                          'Semester', borrowing.semester ?? 'Not provided'),
+                      const SizedBox(height: 12),
+                      _buildStudentInfoRow(
+                          'Email',
+                          borrowing.borrowerEmailContact ??
+                              borrowing.borrowerEmail),
+                      const SizedBox(height: 12),
+                      _buildStudentInfoRow('Contact',
+                          borrowing.borrowerContact ?? 'Not provided'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
             // Chemicals Section
             if (borrowing.chemicals.isNotEmpty) ...[
               Text(
                 'Requested Chemicals',
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
               Card(
@@ -188,8 +231,14 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                   children: borrowing.chemicals.map((chemical) {
                     return ListTile(
                       title: Text(chemical['name']),
-                      subtitle:
-                          Text('${chemical['quantity']} ${chemical['unit']}'),
+                      subtitle: Text(
+                        '${chemical['quantity']} ${chemical['unit']}',
+                        style: TextStyle(
+                          color: chemical['quantity'] < 10
+                              ? Colors.red
+                              : Colors.grey[600],
+                        ),
+                      ),
                     );
                   }).toList(),
                 ),
@@ -201,7 +250,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
             if (borrowing.equipment.isNotEmpty) ...[
               Text(
                 'Requested Equipment',
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
               Card(
@@ -220,7 +269,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
             // Research Details
             Text(
               'Research Details',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
             Card(
@@ -235,7 +284,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
             if (borrowing.notes != null && borrowing.notes!.isNotEmpty) ...[
               Text(
                 'Notes',
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
               Card(
@@ -253,7 +302,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                 borrowing.rejectionReason!.isNotEmpty) ...[
               Text(
                 'Rejection Reason',
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
               Card(
@@ -270,11 +319,11 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
             ],
 
             // Actions for Admin/Technician
-            if (userRole == 'admin' || userRole == 'technician') ...[
+            if (isStaff) ...[
               if (borrowing.status == 'pending') ...[
                 Text(
                   'Add Notes (Optional)',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -286,11 +335,9 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                   maxLines: 2,
                 ),
                 const SizedBox(height: 16),
-
-                // Rejection Reason (only for rejection)
                 Text(
                   'Rejection Reason (Required for Rejection)',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -302,7 +349,6 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                   maxLines: 3,
                 ),
                 const SizedBox(height: 16),
-
                 Row(
                   children: [
                     Expanded(
@@ -362,7 +408,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
             ],
 
             // Status Information for Borrower
-            if (userRole != 'admin' && userRole != 'technician') ...[
+            if (!isStaff) ...[
               if (borrowing.status == 'pending') ...[
                 Card(
                   color: Colors.orange[100],
@@ -401,6 +447,27 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildStudentInfoRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 150,
+          child: Text(
+            '$label:',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(color: Colors.grey[700]),
+          ),
+        ),
+      ],
     );
   }
 
