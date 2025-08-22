@@ -68,190 +68,212 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     final userRole = Provider.of<AuthProvider>(context).userRole;
     final isBorrower = userRole == 'borrower';
 
-    return RefreshIndicator(
-      onRefresh: _refreshEquipment,
-      child: Column(
-        children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search equipment...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onChanged: (value) {
-                _searchQuery = value;
-                _filterEquipment();
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Equipment'),
+        actions: [
+          if (!isBorrower)
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const EquipmentFormScreen(),
+                  ),
+                ).then((_) => _loadEquipment());
               },
             ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredEquipment.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.build_outlined,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No equipment found',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            if (isBorrower)
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  // Go back to dashboard
-                                  Navigator.popUntil(
-                                      context, (route) => route.isFirst);
-                                },
-                                icon: const Icon(Icons.arrow_back),
-                                label: const Text('Back to Dashboard'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue,
-                                  foregroundColor: Colors.white,
-                                ),
-                              ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _filteredEquipment.length,
-                        itemBuilder: (context, index) {
-                          final eq = _filteredEquipment[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: Colors.green[100],
-                                child: const Icon(
-                                  Icons.build,
-                                  color: Colors.green,
-                                ),
-                              ),
-                              title: Text(eq.name),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(eq.category),
-                                  Text('Condition: ${eq.condition}'),
-                                  Text('Location: ${eq.location}'),
-                                  Text(
-                                    'Last Maintenance: ${DateFormat('MMM dd, yyyy').format(eq.lastMaintenanceDate)}',
-                                    style: TextStyle(
-                                      color: eq.lastMaintenanceDate
-                                                  .add(Duration(
-                                                      days: eq
-                                                          .maintenanceSchedule))
-                                                  .difference(DateTime.now())
-                                                  .inDays <
-                                              30
-                                          ? Colors.orange
-                                          : Colors.grey[600],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              // Only show popup menu for admin/technician
-                              trailing: !isBorrower
-                                  ? PopupMenuButton(
-                                      itemBuilder: (context) => [
-                                        const PopupMenuItem(
-                                          value: 'Edit',
-                                          child: Text('Edit'),
-                                        ),
-                                        const PopupMenuItem(
-                                          value: 'Delete',
-                                          child: Text('Delete'),
-                                        ),
-                                      ],
-                                      onSelected: (value) {
-                                        if (value == 'Edit') {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  EquipmentFormScreen(
-                                                equipment: eq,
-                                              ),
-                                            ),
-                                          ).then((_) => _loadEquipment());
-                                        } else if (value == 'Delete') {
-                                          _deleteEquipment(eq);
-                                        }
-                                      },
-                                    )
-                                  : null,
-                              onTap: () {
-                                // Navigate to equipment details screen
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        EquipmentDetailsScreen(equipment: eq),
-                                  ),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
-          ),
-          // Back to dashboard button for borrowers
-          if (isBorrower && _filteredEquipment.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  // Go back to dashboard
-                  Navigator.popUntil(context, (route) => route.isFirst);
-                },
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Back to Dashboard'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 48),
-                ),
-              ),
-            ),
-          // Add button for admin/technician
-          if (!isBorrower)
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const EquipmentFormScreen(),
-                    ),
-                  ).then((_) => _loadEquipment());
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Add Equipment'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
-              ),
-            ),
         ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshEquipment,
+        child: Column(
+          children: [
+            // Search Bar - Wrapped in Material widget to fix error
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Material(
+                type: MaterialType.transparency,
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search equipment...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    _searchQuery = value;
+                    _filterEquipment();
+                  },
+                ),
+              ),
+            ),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredEquipment.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.build_outlined,
+                                size: 64,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No equipment found',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              if (isBorrower)
+                                ElevatedButton.icon(
+                                  onPressed: () {
+                                    // Go back to dashboard
+                                    Navigator.popUntil(
+                                        context, (route) => route.isFirst);
+                                  },
+                                  icon: const Icon(Icons.arrow_back),
+                                  label: const Text('Back to Dashboard'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _filteredEquipment.length,
+                          itemBuilder: (context, index) {
+                            final eq = _filteredEquipment[index];
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: Colors.green[100],
+                                  child: const Icon(
+                                    Icons.build,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                                title: Text(eq.name),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(eq.category),
+                                    Text('Condition: ${eq.condition}'),
+                                    Text('Location: ${eq.location}'),
+                                    Text(
+                                      'Last Maintenance: ${DateFormat('MMM dd, yyyy').format(eq.lastMaintenanceDate)}',
+                                      style: TextStyle(
+                                        color: eq.lastMaintenanceDate
+                                                    .add(Duration(
+                                                        days: eq
+                                                            .maintenanceSchedule))
+                                                    .difference(DateTime.now())
+                                                    .inDays <
+                                                30
+                                            ? Colors.orange
+                                            : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                // Only show popup menu for admin/technician
+                                trailing: !isBorrower
+                                    ? PopupMenuButton(
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(
+                                            value: 'Edit',
+                                            child: Text('Edit'),
+                                          ),
+                                          const PopupMenuItem(
+                                            value: 'Delete',
+                                            child: Text('Delete'),
+                                          ),
+                                        ],
+                                        onSelected: (value) {
+                                          if (value == 'Edit') {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    EquipmentFormScreen(
+                                                  equipment: eq,
+                                                ),
+                                              ),
+                                            ).then((_) => _loadEquipment());
+                                          } else if (value == 'Delete') {
+                                            _deleteEquipment(eq);
+                                          }
+                                        },
+                                      )
+                                    : null,
+                                onTap: () {
+                                  // Navigate to equipment details screen
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          EquipmentDetailsScreen(equipment: eq),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+            ),
+            // Back to dashboard button for borrowers
+            if (isBorrower && _filteredEquipment.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    // Go back to dashboard
+                    Navigator.popUntil(context, (route) => route.isFirst);
+                  },
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Back to Dashboard'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                ),
+              ),
+            // Add button for admin/technician
+            if (!isBorrower)
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const EquipmentFormScreen(),
+                      ),
+                    ).then((_) => _loadEquipment());
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Equipment'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
