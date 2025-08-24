@@ -12,7 +12,7 @@ var logger = Logger();
 
 class ApiService {
   static const String baseUrl =
-      'chemlab-management-system-production.up.railway.app';
+      'https://chemlab-management-system-production.up.railway.app';
   static const String _authTokenKey = 'auth_token';
 
   static Future<String?> getAuthToken() async {
