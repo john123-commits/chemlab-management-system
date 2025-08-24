@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
+import 'package:chemlab_frontend/services/api_service.dart'; // ✅ Add this import
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,9 +12,17 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _passwordFormKey = GlobalKey<FormState>(); // ✅ Add this
   late TextEditingController _nameController;
   late TextEditingController _emailController;
+  // ✅ Add password controllers
+  final TextEditingController _currentPasswordController =
+      TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
+  final TextEditingController _confirmNewPasswordController =
+      TextEditingController();
   bool _isEditing = false;
+  bool _isChangingPassword = false; // ✅ Add this
 
   @override
   void initState() {
@@ -27,6 +36,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    // ✅ Dispose password controllers
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmNewPasswordController.dispose();
     super.dispose();
   }
 
@@ -39,7 +52,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: const Text('Profile'),
         actions: [
-          if (!_isEditing)
+          if (!_isEditing && !_isChangingPassword) // ✅ Update this condition
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: () {
@@ -74,7 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    if (!_isEditing) ...[
+                    if (!_isEditing && !_isChangingPassword) ...[
                       _buildInfoCard('Name', user.name),
                       _buildInfoCard('Email', user.email),
                       _buildInfoCard(
@@ -86,8 +99,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         'Member Since',
                         '${user.createdAt.day}/${user.createdAt.month}/${user.createdAt.year}',
                       ),
-                    ] else
-                      _buildEditForm(authProvider),
+                      const SizedBox(height: 16),
+                      // ✅ Add Change Password Button
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _isChangingPassword = true;
+                          });
+                        },
+                        child: const Text('Change Password'),
+                      ),
+                    ] else if (_isEditing)
+                      _buildEditForm(authProvider)
+                    else if (_isChangingPassword)
+                      _buildPasswordChangeForm(authProvider), // ✅ Add this
                   ],
                 ),
               ),
@@ -195,12 +220,147 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     setState(() {
                       _isEditing = false;
                     });
-                    setState(() {
-                      _isEditing = false;
-                    });
                   }
                 },
                 child: const Text('Save'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ Add this new method for password change form
+  Widget _buildPasswordChangeForm(AuthProvider authProvider) {
+    return Form(
+      key: _passwordFormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Change Password',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _currentPasswordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Current Password',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.lock),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter your current password';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _newPasswordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'New Password',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.lock),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter a new password';
+              }
+              if (value.length < 6) {
+                return 'Password must be at least 6 characters';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _confirmNewPasswordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Confirm New Password',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.lock),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please confirm your new password';
+              }
+              if (value != _newPasswordController.text) {
+                return 'Passwords do not match';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _isChangingPassword = false;
+                    // Clear password fields
+                    _currentPasswordController.clear();
+                    _newPasswordController.clear();
+                    _confirmNewPasswordController.clear();
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey[300],
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (_passwordFormKey.currentState!.validate()) {
+                    try {
+                      // ✅ Call your API to change password
+                      await ApiService.changePassword({
+                        'current_password': _currentPasswordController.text,
+                        'new_password': _newPasswordController.text,
+                      });
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text(
+                                  'Password changed successfully! Please login again.')),
+                        );
+
+                        // Clear password fields
+                        _currentPasswordController.clear();
+                        _newPasswordController.clear();
+                        _confirmNewPasswordController.clear();
+
+                        // Exit password change mode
+                        setState(() {
+                          _isChangingPassword = false;
+                        });
+
+                        // Optional: Logout user to force re-login with new password
+                        // authProvider.logout();
+                      }
+                    } catch (error) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(
+                                  'Failed to change password: ${error.toString()}')),
+                        );
+                      }
+                    }
+                  }
+                },
+                child: const Text('Change Password'),
               ),
             ],
           ),

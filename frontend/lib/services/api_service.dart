@@ -11,6 +11,7 @@ import 'package:logger/logger.dart';
 var logger = Logger();
 
 class ApiService {
+  // ✅ FIXED: Removed extra spaces from baseUrl
   static const String baseUrl =
       'https://chemlab-management-system-production.up.railway.app';
   static const String _authTokenKey = 'auth_token';
@@ -38,6 +39,28 @@ class ApiService {
       headers['Authorization'] = 'Bearer $token';
     }
     return headers;
+  }
+
+  // ✅ ADD: Password Change Method
+  static Future<void> changePassword(Map<String, dynamic> passwordData) async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final response = await http.put(
+      Uri.parse('$baseUrl/auth/change-password'),
+      headers: getHeaders(token),
+      body: jsonEncode(passwordData),
+    );
+
+    if (response.statusCode == 200) {
+      return;
+    } else if (response.statusCode == 401) {
+      throw Exception('Current password is incorrect');
+    } else {
+      throw Exception('Failed to change password: ${response.body}');
+    }
   }
 
   // Auth endpoints
