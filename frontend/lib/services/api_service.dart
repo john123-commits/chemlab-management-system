@@ -12,8 +12,7 @@ var logger = Logger();
 
 class ApiService {
   // ✅ FIXED: Removed extra spaces from baseUrl
-  static const String baseUrl =
-      'https://chemlab-management-system-production.up.railway.app';
+  static const String baseUrl = 'http://localhost:5000/api';
   static const String _authTokenKey = 'auth_token';
 
   static Future<String?> getAuthToken() async {
