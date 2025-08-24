@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'package:logger/logger.dart';
+
+var logger = Logger();
 
 class LectureSchedule {
   final int id;
@@ -98,7 +101,7 @@ class LectureSchedule {
           chemicals = List<dynamic>.from(rawChemicals);
         }
       } catch (e) {
-        print('Chemicals parsing error: $e');
+        logger.d('Chemicals parsing error: $e');
         chemicals = [];
       }
     }
@@ -133,7 +136,7 @@ class LectureSchedule {
           equipment = List<dynamic>.from(rawEquipment);
         }
       } catch (e) {
-        print('Equipment parsing error: $e');
+        logger.d('Equipment parsing error: $e');
         equipment = [];
       }
     }

@@ -137,6 +137,7 @@ class _LectureScheduleDetailsScreenState
                     ),
                   ),
                 ).then((result) {
+                  if (!context.mounted) return;
                   if (result == true && mounted) {
                     Navigator.pop(context, true); // Refresh parent
                   }

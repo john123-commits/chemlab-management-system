@@ -7,6 +7,9 @@ import 'package:chemlab_frontend/services/api_service.dart';
 import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/models/equipment.dart';
 import 'package:intl/intl.dart';
+import 'package:logger/logger.dart';
+
+var logger = Logger();
 
 class LectureScheduleFormScreen extends StatefulWidget {
   final Map<String, dynamic>? schedule;
@@ -82,7 +85,7 @@ class _LectureScheduleFormScreenState extends State<LectureScheduleFormScreen> {
         return data.cast<Map<String, dynamic>>();
       }
     } catch (e) {
-      print('Error parsing JSON array: $e');
+      logger.d('Error parsing JSON array: $e');
     }
     return [];
   }
