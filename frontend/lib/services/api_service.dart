@@ -11,7 +11,8 @@ import 'package:logger/logger.dart';
 var logger = Logger();
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:5000/api';
+  static const String baseUrl =
+      'chemlab-management-system-production.up.railway.app';
   static const String _authTokenKey = 'auth_token';
 
   static Future<String?> getAuthToken() async {
