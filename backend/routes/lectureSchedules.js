@@ -9,9 +9,8 @@ router.get('/', authenticateToken, requireAdminOrTechnician, async (req, res) =>
   try {
     const filters = {};
     
-    if (req.user.role === 'admin') {
-      filters.admin_id = req.user.userId;
-    } else if (req.user.role === 'technician') {
+    // Admins can see all schedules, technicians see only theirs
+    if (req.user.role === 'technician') {
       filters.technician_id = req.user.userId;
     }
 
@@ -26,6 +25,7 @@ router.get('/', authenticateToken, requireAdminOrTechnician, async (req, res) =>
     const schedules = await LectureSchedule.findAll(filters);
     res.json(schedules);
   } catch (error) {
+    console.error('Error in LectureSchedule.findAll:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -39,17 +39,14 @@ router.get('/:id', authenticateToken, requireAdminOrTechnician, async (req, res)
       return res.status(404).json({ error: 'Lecture schedule not found' });
     }
 
-    // Check permissions
-    if (req.user.role === 'admin' && schedule.admin_id !== req.user.userId) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-    
+    // Check permissions - admins can see all, technicians only theirs
     if (req.user.role === 'technician' && schedule.technician_id !== req.user.userId) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
     res.json(schedule);
   } catch (error) {
+    console.error('Error in LectureSchedule.findById:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -57,14 +54,27 @@ router.get('/:id', authenticateToken, requireAdminOrTechnician, async (req, res)
 // Create lecture schedule (admin only)
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
+    // Format arrays as JSON strings
+    const formattedChemicals = Array.isArray(req.body.required_chemicals) 
+      ? JSON.stringify(req.body.required_chemicals) 
+      : '[]';
+    const formattedEquipment = Array.isArray(req.body.required_equipment) 
+      ? JSON.stringify(req.body.required_equipment) 
+      : '[]';
+    
     const scheduleData = {
       ...req.body,
-      admin_id: req.user.userId
+      admin_id: req.user.userId,
+      required_chemicals: formattedChemicals,
+      required_equipment: formattedEquipment
     };
+
+    console.log('Creating lecture schedule with data:', scheduleData);
 
     const schedule = await LectureSchedule.create(scheduleData);
     res.status(201).json(schedule);
   } catch (error) {
+    console.error('Error in LectureSchedule.create:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -78,12 +88,30 @@ router.put('/:id', authenticateToken, requireAdminOrTechnician, async (req, res)
       return res.status(404).json({ error: 'Lecture schedule not found' });
     }
 
+    // Check permissions
+    if (req.user.role === 'technician' && schedule.technician_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     // Admin can update everything, technician can only confirm
     let updateData = {};
     
     if (req.user.role === 'admin') {
       // Admin can update all fields
       updateData = { ...req.body };
+      
+      // Format arrays as JSON strings if provided
+      if (req.body.required_chemicals !== undefined) {
+        updateData.required_chemicals = Array.isArray(req.body.required_chemicals) 
+          ? JSON.stringify(req.body.required_chemicals) 
+          : '[]';
+      }
+      
+      if (req.body.required_equipment !== undefined) {
+        updateData.required_equipment = Array.isArray(req.body.required_equipment) 
+          ? JSON.stringify(req.body.required_equipment) 
+          : '[]';
+      }
     } else if (req.user.role === 'technician') {
       // Technician can only update status and notes
       if (req.body.status) {
@@ -97,15 +125,6 @@ router.put('/:id', authenticateToken, requireAdminOrTechnician, async (req, res)
       }
     }
 
-    // Check permissions
-    if (req.user.role === 'admin' && schedule.admin_id !== req.user.userId) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-    
-    if (req.user.role === 'technician' && schedule.technician_id !== req.user.userId) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const updatedSchedule = await LectureSchedule.update(req.params.id, updateData);
     if (!updatedSchedule) {
       return res.status(404).json({ error: 'Lecture schedule not found' });
@@ -113,6 +132,7 @@ router.put('/:id', authenticateToken, requireAdminOrTechnician, async (req, res)
 
     res.json(updatedSchedule);
   } catch (error) {
+    console.error('Error in LectureSchedule.update:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -138,6 +158,7 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
 
     res.json({ message: 'Lecture schedule deleted successfully' });
   } catch (error) {
+    console.error('Error in LectureSchedule.delete:', error);
     res.status(500).json({ error: error.message });
   }
 });

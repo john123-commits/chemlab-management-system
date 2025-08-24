@@ -38,6 +38,55 @@ class User {
     return result.rows[0];
   }
 
+  // Add to User model:
+
+static async getPendingRequestsCount() {
+  try {
+    console.log('=== USER MODEL: GET PENDING REQUESTS COUNT ===');
+    
+    const result = await db.query(
+      `SELECT COUNT(*) as count
+       FROM borrowings 
+       WHERE status = 'pending'`
+    );
+    
+    console.log('Pending requests count result:', result.rows[0].count);
+    
+    return parseInt(result.rows[0].count);
+  } catch (error) {
+    console.error('Error in User.getPendingRequestsCount:', error);
+    return 0; // Return 0 instead of throwing error
+  }
+}
+
+static async getPendingRequests() {
+  try {
+    console.log('=== USER MODEL: GET PENDING REQUESTS ===');
+    
+    const result = await db.query(
+      `SELECT b.*, u.name as borrower_name, u.email as borrower_email 
+       FROM borrowings b 
+       JOIN users u ON b.borrower_id = u.id 
+       WHERE b.status = 'pending'
+       ORDER BY b.created_at ASC`
+    );
+    
+    console.log('Found pending requests:', result.rows.length);
+    
+    // Parse JSON fields
+    const pendingRequests = result.rows.map(row => ({
+      ...row,
+      chemicals: typeof row.chemicals === 'string' ? JSON.parse(row.chemicals) : row.chemicals || [],
+      equipment: typeof row.equipment === 'string' ? JSON.parse(row.equipment) : row.equipment || []
+    }));
+    
+    return pendingRequests;
+  } catch (error) {
+    console.error('Error in User.getPendingRequests:', error);
+    return []; // Return empty array instead of throwing error
+  }
+}
+
   static async delete(id) {
     const result = await db.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
     return result.rows[0];

@@ -1,26 +1,42 @@
 const express = require('express');
 const Borrowing = require('../models/Borrowing');
-const { authenticateToken, requireAdminOrTechnician } = require('../middleware/auth'); // ✅ Added requireAdminOrTechnician
+const { authenticateToken, requireAdminOrTechnician } = require('../middleware/auth');
 const router = express.Router();
 
-router.get('/', authenticateToken, requireAdminOrTechnician, async (req, res) => {
+// Get all borrowings - Allow borrowers to see their own requests
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const filters = {};
-    if (req.user.role !== 'admin' && req.user.role !== 'technician') {
+    
+    // Borrowers can only see their own requests
+    if (req.user.role === 'borrower') {
       filters.borrower_id = req.user.userId;
     }
-    if (req.query.status) {
-      filters.status = req.query.status;
+    
+    // Admins and technicians can filter by borrower_id and status
+    if (req.user.role !== 'borrower') {
+      if (req.query.borrower_id) {
+        filters.borrower_id = req.query.borrower_id;
+      }
+      if (req.query.status) {
+        filters.status = req.query.status;
+      }
+    } else {
+      // Borrowers can only filter by their own status
+      if (req.query.status) {
+        filters.status = req.query.status;
+      }
     }
     
     const borrowings = await Borrowing.findAll(filters);
     res.json(borrowings);
   } catch (error) {
+    console.error('Error in Borrowing.findAll:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get borrowing by ID
+// Get borrowing by ID - Allow borrowers to see their own requests
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const borrowing = await Borrowing.findById(req.params.id);
@@ -36,11 +52,12 @@ router.get('/:id', authenticateToken, async (req, res) => {
     
     res.json(borrowing);
   } catch (error) {
+    console.error('Error in Borrowing.findById:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Create borrowing request
+// Create borrowing request - Allow borrowers to create requests
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const borrowingData = {
@@ -50,18 +67,14 @@ router.post('/', authenticateToken, async (req, res) => {
     const borrowing = await Borrowing.create(borrowingData);
     res.status(201).json(borrowing);
   } catch (error) {
+    console.error('Error in Borrowing.create:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Update borrowing status (admin/technician only)
-router.put('/:id/status', authenticateToken, async (req, res) => {
+router.put('/:id/status', authenticateToken, requireAdminOrTechnician, async (req, res) => {
   try {
-    // Check permissions
-    if (req.user.role !== 'admin' && req.user.role !== 'technician') {
-      return res.status(403).json({ error: 'Permission denied' });
-    }
-    
     const { status, notes, rejection_reason } = req.body;
     
     // Validate status
@@ -106,22 +119,24 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
-// Get pending requests count (for dashboard alerts)
-router.get('/pending/count', authenticateToken, requireAdminOrTechnician, async (req, res) => { // ✅ Added middleware
+// Get pending requests count (for dashboard alerts) - Admin/Technician only
+router.get('/pending/count', authenticateToken, requireAdminOrTechnician, async (req, res) => {
   try {
     const count = await Borrowing.getPendingRequestsCount();
     res.json({ count });
   } catch (error) {
+    console.error('Error in Borrowing.getPendingRequestsCount:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get pending requests (for admin/technician review)
-router.get('/pending', authenticateToken, requireAdminOrTechnician, async (req, res) => { // ✅ Added middleware
+// Get pending requests (for admin/technician review) - Admin/Technician only
+router.get('/pending', authenticateToken, requireAdminOrTechnician, async (req, res) => {
   try {
     const pendingRequests = await Borrowing.getPendingRequests();
     res.json(pendingRequests);
   } catch (error) {
+    console.error('Error in Borrowing.getPendingRequests:', error);
     res.status(500).json({ error: error.message });
   }
 });

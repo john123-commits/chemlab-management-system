@@ -13,6 +13,7 @@ class AuthProvider with ChangeNotifier {
   bool get isAuthenticated => _user != null;
   bool get isLoading => _isLoading;
   String get userRole => _user?.role ?? '';
+  int get userId => _user?.id ?? 0;
 
   Future<void> login(String email, String password) async {
     _isLoading = true;
@@ -52,12 +53,59 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      logger.d('AuthProvider: Attempting registration for $email');
+
+      // SECURITY FIX: Force borrower role for public registration
+      const secureRole = 'borrower';
+
+      logger.d('AuthProvider: Registering as borrower (forced)');
+
       await ApiService.register(
         name: name,
         email: email,
         password: password,
-        role: role,
+        role: secureRole, // Always use borrower role for public registration
       );
+
+      logger.d('AuthProvider: Registration successful for $email');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Admin-only staff registration
+  Future<void> registerStaff({
+    required String name,
+    required String email,
+    required String password,
+    required String role,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      logger.d('AuthProvider: Attempting staff registration for $email');
+
+      // Validate role for staff creation
+      if (role != 'technician' && role != 'admin') {
+        throw Exception(
+            'Only technician or admin roles can be created by admins');
+      }
+
+      // Check if current user is admin
+      if (_user?.role != 'admin') {
+        throw Exception('Only admins can create staff accounts');
+      }
+
+      await ApiService.createStaffUser({
+        'name': name,
+        'email': email,
+        'password': password,
+        'role': role,
+      });
+
+      logger.d('AuthProvider: Staff registration successful for $email');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -65,14 +113,46 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await ApiService.clearAuthToken();
-    _user = null;
-    notifyListeners();
+    try {
+      logger.d('AuthProvider: Logging out user ${_user?.name}');
+      await ApiService.clearAuthToken();
+      _user = null;
+      logger.d('AuthProvider: Logout successful');
+    } catch (error) {
+      logger.e('AuthProvider: Logout error: $error');
+      _user = null; // Clear user anyway
+    } finally {
+      notifyListeners();
+    }
   }
 
   Future<void> autoLogin() async {
-    // This would check for existing token and validate it
-    // For simplicity, we'll just check if we have a user
-    // In a real app, you'd validate the token with the server
+    try {
+      logger.d('AuthProvider: Attempting auto-login');
+
+      // Check for existing token
+      final token = await ApiService.getAuthToken();
+      if (token == null) {
+        logger.d('AuthProvider: No token found');
+        return;
+      }
+
+      // Validate token with server
+      final userData = await ApiService.getCurrentUser();
+      if (userData != null) {
+        _user = User.fromJson(userData);
+        logger.d('AuthProvider: Auto-login successful for ${_user?.name}');
+      } else {
+        logger.d('AuthProvider: Token invalid, clearing');
+        await ApiService.clearAuthToken();
+        _user = null;
+      }
+    } catch (error) {
+      logger.e('AuthProvider: Auto-login error: $error');
+      await ApiService.clearAuthToken();
+      _user = null;
+    } finally {
+      notifyListeners();
+    }
   }
 }

@@ -16,7 +16,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  String _selectedRole = 'borrower';
+  final String _selectedRole = 'borrower'; // Hardcoded to borrower for security
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
@@ -39,7 +39,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text,
-          role: _selectedRole,
+          role: _selectedRole, // Always borrower for public registration
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -52,11 +52,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           MaterialPageRoute(builder: (context) => const LoginScreen()),
         );
       } catch (error) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Registration failed: ${error.toString()}')),
         );
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
@@ -175,30 +178,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
               ),
               const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedRole,
-                decoration: const InputDecoration(
-                  labelText: 'Role',
-                  prefixIcon: Icon(Icons.work),
-                  border: OutlineInputBorder(),
+
+              // Information Card - Explain role limitation
+              Card(
+                color: Colors.blue[50],
+                child: const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.info,
+                        color: Colors.blue,
+                        size: 32,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Registration Information',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        '• All new registrations are created as Borrowers',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      Text(
+                        '• Technicians and Admins must be created by existing Admins',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      Text(
+                        '• Contact system administrator for staff accounts',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ],
+                  ),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'borrower', child: Text('Borrower')),
-                  DropdownMenuItem(
-                      value: 'technician', child: Text('Technician')),
-                  DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedRole = value!;
-                  });
-                },
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please select a role';
-                  }
-                  return null;
-                },
+              ),
+              const SizedBox(height: 20),
+
+              // Role Display (Read-only)
+              const Card(
+                elevation: 2,
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.work, color: Colors.grey),
+                      SizedBox(width: 16),
+                      Text(
+                        'Role: ',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text('Borrower'),
+                      Spacer(),
+                      Icon(Icons.lock, color: Colors.grey, size: 16),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 30),
               SizedBox(
@@ -214,7 +252,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: _isLoading
                       ? const CircularProgressIndicator()
                       : const Text(
-                          'Register',
+                          'Register as Borrower',
                           style: TextStyle(fontSize: 16),
                         ),
                 ),
