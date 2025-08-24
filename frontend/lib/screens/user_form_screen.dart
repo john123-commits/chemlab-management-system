@@ -145,9 +145,12 @@ class _UserFormScreenState extends State<UserFormScreen> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _emailController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Email *',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  hintText: _selectedRole == 'admin'
+                      ? 'user@example.com'
+                      : 'user@institution.edu', // ✅ Added contextual hint
                 ),
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) {
@@ -157,6 +160,35 @@ class _UserFormScreenState extends State<UserFormScreen> {
                   if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
                     return 'Please enter a valid email';
                   }
+
+                  // ✅ Institutional email requirement for technicians and borrowers
+                  if (_selectedRole != 'admin') {
+                    // List of acceptable institutional domains
+                    final allowedDomains = [
+                      '.edu', // Educational institutions
+                      '.ac.', // Academic institutions (e.g., .ac.uk, .ac.ug)
+                      '.org', // Non-profit organizations
+                      '.gov' // Government institutions
+                    ];
+
+                    bool hasValidDomain = false;
+                    for (var domain in allowedDomains) {
+                      if (value.toLowerCase().contains(domain)) {
+                        hasValidDomain = true;
+                        break;
+                      }
+                    }
+
+                    if (!hasValidDomain) {
+                      return '⚠️ Institutional email required\n'
+                          '✅ Must end with: .edu, .ac, .org, or .gov\n'
+                          '📝 Examples:\n'
+                          '   • student@university.edu\n'
+                          '   • tech@college.ac.uk\n'
+                          '   • staff@institute.org';
+                    }
+                  }
+
                   return null;
                 },
               ),

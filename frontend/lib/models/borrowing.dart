@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'package:logger/logger.dart';
+
+final logger = Logger();
+
 class Borrowing {
   final int id;
   final int borrowerId;
@@ -22,6 +27,13 @@ class Borrowing {
   final String? rejectionReason;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  // ✅ NEW: Return confirmation fields
+  final bool returned;
+  final DateTime? actualReturnDate;
+  final Map<String, dynamic>? equipmentCondition;
+  final String? returnNotes;
+  final int? returnConfirmedBy;
 
   // Add student information fields
   final String? university;
@@ -57,6 +69,12 @@ class Borrowing {
     this.rejectionReason,
     required this.createdAt,
     required this.updatedAt,
+    // ✅ NEW: Return confirmation fields
+    this.returned = false,
+    this.actualReturnDate,
+    this.equipmentCondition,
+    this.returnNotes,
+    this.returnConfirmedBy,
     // Add student information fields
     this.university,
     this.educationLevel,
@@ -69,6 +87,20 @@ class Borrowing {
   });
 
   factory Borrowing.fromJson(Map<String, dynamic> json) {
+    // ✅ Handle equipment condition parsing
+    Map<String, dynamic>? equipmentCondition;
+    if (json['equipment_condition'] != null) {
+      try {
+        if (json['equipment_condition'] is String) {
+          equipmentCondition = jsonDecode(json['equipment_condition']);
+        } else if (json['equipment_condition'] is Map) {
+          equipmentCondition = json['equipment_condition'];
+        }
+      } catch (e) {
+        logger.d('Error parsing equipment condition: $e');
+      }
+    }
+
     return Borrowing(
       id: json['id'],
       borrowerId: json['borrower_id'],
@@ -97,6 +129,14 @@ class Borrowing {
       rejectionReason: json['rejection_reason'],
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at'] ?? json['created_at']),
+      // ✅ NEW: Return confirmation fields
+      returned: json['returned'] ?? false,
+      actualReturnDate: json['actual_return_date'] != null
+          ? DateTime.parse(json['actual_return_date'])
+          : null,
+      equipmentCondition: equipmentCondition,
+      returnNotes: json['return_notes'],
+      returnConfirmedBy: json['return_confirmed_by'],
       // Add student information fields
       university: json['university'],
       educationLevel: json['education_level'],
@@ -134,6 +174,13 @@ class Borrowing {
       'rejection_reason': rejectionReason,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      // ✅ NEW: Return confirmation fields
+      'returned': returned,
+      'actual_return_date': actualReturnDate?.toIso8601String(),
+      'equipment_condition':
+          equipmentCondition != null ? jsonEncode(equipmentCondition) : null,
+      'return_notes': returnNotes,
+      'return_confirmed_by': returnConfirmedBy,
       // Add student information fields
       'university': university,
       'education_level': educationLevel,

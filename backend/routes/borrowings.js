@@ -141,4 +141,40 @@ router.get('/pending', authenticateToken, requireAdminOrTechnician, async (req, 
   }
 });
 
+router.post('/:id/return', authenticateToken, requireAdminOrTechnician, async (req, res) => {
+  try {
+    const { equipmentCondition, returnNotes } = req.body;
+    const borrowingId = req.params.id;
+    const technicianId = req.user.userId;
+    
+    const updatedBorrowing = await Borrowing.markAsReturned(
+      borrowingId, 
+      { equipmentCondition, returnNotes }, 
+      technicianId
+    );
+    
+    // Update equipment quantities back in inventory
+    for (const [equipmentId, condition] of Object.entries(equipmentCondition)) {
+      // Update equipment status/condition in inventory
+      await Equipment.updateCondition(equipmentId, condition.status);
+    }
+    
+    res.json(updatedBorrowing);
+  } catch (error) {
+    console.error('Error marking borrowing as returned:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get active (not returned) borrowings
+router.get('/active', authenticateToken, requireAdminOrTechnician, async (req, res) => {
+  try {
+    const borrowings = await Borrowing.getActiveBorrowings();
+    res.json(borrowings);
+  } catch (error) {
+    console.error('Error fetching active borrowings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

@@ -750,4 +750,36 @@ class ApiService {
       return null;
     }
   }
+
+  static Future<Borrowing> markBorrowingAsReturned(
+      int borrowingId, Map<String, dynamic> returnData) async {
+    final token = await getAuthToken();
+    final response = await http.post(
+      Uri.parse('$baseUrl/borrowings/$borrowingId/return'),
+      headers: getHeaders(token),
+      body: jsonEncode(returnData),
+    );
+
+    if (response.statusCode == 200) {
+      return Borrowing.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Failed to mark borrowing as returned: ${response.body}');
+    }
+  }
+
+// Add this method to get active borrowings
+  static Future<List<Borrowing>> getActiveBorrowings() async {
+    final token = await getAuthToken();
+    final response = await http.get(
+      Uri.parse('$baseUrl/borrowings/active'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => Borrowing.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load active borrowings');
+    }
+  }
 }

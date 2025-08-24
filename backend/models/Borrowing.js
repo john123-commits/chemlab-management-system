@@ -293,6 +293,43 @@ class Borrowing {
     }
   }
 
+  static async markAsReturned(borrowingId, returnData, technicianId) {
+  const { equipmentCondition, returnNotes } = returnData;
+  
+  const result = await db.query(
+    `UPDATE borrowings 
+     SET returned = true,
+         return_date = NOW(),
+         equipment_condition = $1,
+         return_notes = $2,
+         return_confirmed_by = $3,
+         status = 'returned'
+     WHERE id = $4 
+     RETURNING *`,
+    [JSON.stringify(equipmentCondition), returnNotes, technicianId, borrowingId]
+  );
+  
+  return result.rows[0];
+}
+
+static async getActiveBorrowings() {
+  const result = await db.query(
+    `SELECT b.*, u.name as borrower_name, u.email as borrower_email,
+            tech.name as technician_name
+     FROM borrowings b
+     JOIN users u ON b.borrower_id = u.id
+     LEFT JOIN users tech ON b.technician_id = tech.id
+     WHERE b.status = 'approved' AND b.returned = false
+     ORDER BY b.created_at DESC`
+  );
+  
+  return result.rows.map(row => ({
+    ...row,
+    chemicals: typeof row.chemicals === 'string' ? JSON.parse(row.chemicals) : row.chemicals || [],
+    equipment: typeof row.equipment === 'string' ? JSON.parse(row.equipment) : row.equipment || []
+  }));
+}
+
   static async getOverdue() {
     try {
       // Check if required columns exist

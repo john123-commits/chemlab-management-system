@@ -73,6 +73,41 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
     }
   }
 
+  // ✅ NEW: Mark as Returned Method
+  Future<void> _markAsReturned() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mark as Returned'),
+        content: const Text(
+            'Are you sure you want to mark this borrowing as returned? '
+            'This will open the return confirmation form.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      // Navigate to return confirmation screen
+      // For now, show a simple success message
+      // You can implement a full return confirmation form later
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Return functionality to be implemented')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final userRole = Provider.of<AuthProvider>(context).userRole;
@@ -166,6 +201,35 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                           'Approved At: ${DateFormat('MMM dd, yyyy HH:mm').format(borrowing.adminApprovedAt!)}',
                           style: TextStyle(color: Colors.grey[600]),
                         ),
+                    ],
+                    // ✅ NEW: Show return status
+                    if (borrowing.returned) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'RETURNED',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      if (borrowing.actualReturnDate != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Returned: ${DateFormat('MMM dd, yyyy HH:mm').format(borrowing.actualReturnDate!)}',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ],
                     ],
                   ],
                 ),
@@ -318,6 +382,67 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
               const SizedBox(height: 16),
             ],
 
+            // ✅ NEW: Return Notes Section (if returned)
+            if (borrowing.returned &&
+                borrowing.returnNotes != null &&
+                borrowing.returnNotes!.isNotEmpty) ...[
+              Text(
+                'Return Notes',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Card(
+                color: Colors.blue[50],
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    borrowing.returnNotes!,
+                    style: const TextStyle(color: Colors.blue),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ✅ NEW: Equipment Condition Section (if returned)
+            if (borrowing.returned &&
+                borrowing.equipmentCondition != null &&
+                borrowing.equipmentCondition!.isNotEmpty) ...[
+              Text(
+                'Equipment Condition',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: Column(
+                  children: borrowing.equipmentCondition!.entries.map((entry) {
+                    final equipmentId = entry.key;
+                    final condition = entry.value as Map<String, dynamic>;
+                    // Find equipment name from original equipment list
+                    final equipment = borrowing.equipment.firstWhere(
+                      (e) => e['id'].toString() == equipmentId,
+                      orElse: () => {'name': 'Unknown Equipment'},
+                    );
+
+                    return ListTile(
+                      title: Text(equipment['name']),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              'Status: ${condition['status']?.toString().toUpperCase()}'),
+                          if (condition['notes'] != null &&
+                              condition['notes'].toString().isNotEmpty)
+                            Text('Notes: ${condition['notes']}'),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // Actions for Admin/Technician
             if (isStaff) ...[
               if (borrowing.status == 'pending') ...[
@@ -382,14 +507,41 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                     ),
                   ],
                 ),
-              ] else if (borrowing.status == 'approved') ...[
+              ] else if (borrowing.status == 'approved' &&
+                  !borrowing.returned) ...[
+                // ✅ NEW: Mark as Returned Button for approved borrowings
                 Card(
                   color: Colors.green[100],
-                  child: const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text(
-                      'This request has been approved.',
-                      style: TextStyle(color: Colors.green),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'This request has been approved!',
+                          style: TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Items can be collected on the scheduled visit date.',
+                          style: TextStyle(color: Colors.green),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed:
+                                _markAsReturned, // ✅ NEW: Mark as returned
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('Mark as Returned'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -401,6 +553,18 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                     child: Text(
                       'This request has been rejected.',
                       style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ),
+              ] else if (borrowing.returned) ...[
+                // ✅ NEW: Returned Status Display
+                Card(
+                  color: Colors.blue[100],
+                  child: const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      'This borrowing has been marked as returned.',
+                      style: TextStyle(color: Colors.blue),
                     ),
                   ),
                 ),
@@ -423,12 +587,32 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
               ] else if (borrowing.status == 'approved') ...[
                 Card(
                   color: Colors.green[100],
-                  child: const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text(
-                      'Your request has been approved! You can collect the items on the scheduled visit date.',
-                      style: TextStyle(color: Colors.green),
-                    ),
+                  child: Column(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text(
+                          'Your request has been approved! You can collect the items on the scheduled visit date.',
+                          style: TextStyle(color: Colors.green),
+                        ),
+                      ),
+                      // ✅ NEW: Show return status to borrower
+                      if (borrowing.returned) ...[
+                        Container(
+                          padding: const EdgeInsets.all(16.0),
+                          decoration: const BoxDecoration(
+                            border: Border(top: BorderSide(color: Colors.blue)),
+                          ),
+                          child: const Text(
+                            '✅ Items have been returned successfully.',
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ] else if (borrowing.status == 'rejected') ...[
