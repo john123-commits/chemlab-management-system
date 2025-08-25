@@ -2,13 +2,14 @@ const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 
 class User {
+  // ✅ FIXED: Remove double hashing
   static async create(userData) {
     const { name, email, password, role = 'borrower' } = userData;
-    const hashedPassword = await bcrypt.hash(password, 10);
     
+    // Don't hash here - password should already be hashed by the caller
     const result = await db.query(
       'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, email, hashedPassword, role]
+      [name, email, password, role] // Use password as-is (already hashed)
     );
     
     return result.rows[0];
@@ -38,7 +39,6 @@ class User {
     return result.rows[0];
   }
 
-  // Add to User model:
   static async getPendingRequestsCount() {
     try {
       console.log('=== USER MODEL: GET PENDING REQUESTS COUNT ===');
@@ -54,7 +54,7 @@ class User {
       return parseInt(result.rows[0].count);
     } catch (error) {
       console.error('Error in User.getPendingRequestsCount:', error);
-      return 0; // Return 0 instead of throwing error
+      return 0;
     }
   }
 
@@ -82,11 +82,10 @@ class User {
       return pendingRequests;
     } catch (error) {
       console.error('Error in User.getPendingRequests:', error);
-      return []; // Return empty array instead of throwing error
+      return [];
     }
   }
 
-  // ✅ FIXED DELETE METHOD:
   static async delete(id) {
     try {
       // First, handle dependent lecture schedules to avoid foreign key constraint

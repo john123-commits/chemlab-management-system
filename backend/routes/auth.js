@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const authController = require('../controllers/authController'); // ✅ Fixed import
 
 const router = express.Router();
 
@@ -72,15 +73,16 @@ router.post('/register', async (req, res) => {
 });
 
 // ADMIN-ONLY USER CREATION - For technicians and admins
+// ADMIN-ONLY USER CREATION - Enhanced debug
 router.post('/register/staff', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
     
-    console.log('=== ADMIN STAFF CREATION ATTEMPT ===');
-    console.log('Creator ID:', req.user.userId);
-    console.log('New user data:', { name, email, role });
+    console.log('=== ADMIN STAFF CREATION DEBUG ===');
+    console.log('Password received:', JSON.stringify(password));
+    console.log('Password length:', password ? password.length : 0);
 
-    // Validate role (only allow technician or admin)
+    // Validate role
     if (role !== 'technician' && role !== 'admin') {
       console.log('Staff creation failed: Invalid role');
       return res.status(400).json({ 
@@ -101,9 +103,14 @@ router.post('/register/staff', authenticateToken, requireAdmin, async (req, res)
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    // Hash password
+    // Hash password - ADD DETAILED DEBUGGING
+    console.log('About to hash password...');
     const hashedPassword = await bcrypt.hash(password, 10);
-    console.log('Password hashed successfully');
+    console.log('Password hashed to:', hashedPassword);
+    
+    // Test the hash immediately
+    const testMatch = await bcrypt.compare(password, hashedPassword);
+    console.log('Immediate test of hash - should be TRUE:', testMatch);
 
     // Create staff user
     const user = await User.create({ 
@@ -113,7 +120,7 @@ router.post('/register/staff', authenticateToken, requireAdmin, async (req, res)
       role 
     });
     
-    console.log('Staff user created successfully:', user.id);
+    console.log('Stored user password in DB:', user.password);
 
     // Generate token
     const token = jwt.sign(
@@ -121,8 +128,6 @@ router.post('/register/staff', authenticateToken, requireAdmin, async (req, res)
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
-
-    console.log('Token generated successfully');
 
     res.status(201).json({
       token,
@@ -138,37 +143,9 @@ router.post('/register/staff', authenticateToken, requireAdmin, async (req, res)
     res.status(500).json({ error: error.message });
   }
 });
+// ✅ USE CONTROLLER FOR LOGIN (fixed)
+router.post('/login', authController.login);
 
-// Login
-router.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    console.log('=== LOGIN ATTEMPT ===');
-    console.log('Email:', email);
-
-    // Find user
-    const user = await User.findByEmail(email);
-    if (!user) {
-      console.log('Login failed: User not found');
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      console.log('Login failed: Invalid password');
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Generate token
-    const token = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    // Add this route to your auth routes:
 // Get current user (for auto-login)
 router.get('/me', authenticateToken, async (req, res) => {
   try {
@@ -197,21 +174,5 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
-    console.log('Login successful for user:', user.id);
-
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 module.exports = router;
