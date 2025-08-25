@@ -141,7 +141,7 @@ class _BorrowingReturnScreenState extends State<BorrowingReturnScreen> {
 
                       // Condition Selection
                       DropdownButtonFormField<String>(
-                        value: condition['status'],
+                        initialValue: condition['status'],
                         decoration: const InputDecoration(
                           labelText: 'Condition',
                           border: OutlineInputBorder(),
