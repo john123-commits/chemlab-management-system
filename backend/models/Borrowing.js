@@ -115,7 +115,10 @@ class Borrowing {
         current_year: row.current_year,
         semester: row.semester,
         borrower_email: row.borrower_email,
-        borrower_contact: row.borrower_contact
+        borrower_contact: row.borrower_contact,
+        // ✅ Parse equipment_condition if it exists
+        equipment_condition: row.equipment_condition ? 
+          (typeof row.equipment_condition === 'string' ? JSON.parse(row.equipment_condition) : row.equipment_condition) : null
       }));
       
       return borrowings;
@@ -158,7 +161,10 @@ class Borrowing {
         current_year: row.current_year,
         semester: row.semester,
         borrower_email: row.borrower_email,
-        borrower_contact: row.borrower_contact
+        borrower_contact: row.borrower_contact,
+        // ✅ Parse equipment_condition if it exists
+        equipment_condition: row.equipment_condition ? 
+          (typeof row.equipment_condition === 'string' ? JSON.parse(row.equipment_condition) : row.equipment_condition) : null
       };
     } catch (error) {
       console.error('Error in Borrowing.findById:', error);
@@ -236,7 +242,10 @@ class Borrowing {
         current_year: row.current_year,
         semester: row.semester,
         borrower_email: row.borrower_email,
-        borrower_contact: row.borrower_contact
+        borrower_contact: row.borrower_contact,
+        // ✅ Parse equipment_condition if it exists
+        equipment_condition: row.equipment_condition ? 
+          (typeof row.equipment_condition === 'string' ? JSON.parse(row.equipment_condition) : row.equipment_condition) : null
       };
     } catch (error) {
       console.error('Error in Borrowing.updateStatus:', error);
@@ -266,7 +275,10 @@ class Borrowing {
         current_year: row.current_year,
         semester: row.semester,
         borrower_email: row.borrower_email,
-        borrower_contact: row.borrower_contact
+        borrower_contact: row.borrower_contact,
+        // ✅ Parse equipment_condition if it exists
+        equipment_condition: row.equipment_condition ? 
+          (typeof row.equipment_condition === 'string' ? JSON.parse(row.equipment_condition) : row.equipment_condition) : null
       }));
       
       return pendingRequests;
@@ -293,42 +305,104 @@ class Borrowing {
     }
   }
 
-  static async markAsReturned(borrowingId, returnData, technicianId) {
-  const { equipmentCondition, returnNotes } = returnData;
-  
-  const result = await db.query(
-    `UPDATE borrowings 
-     SET returned = true,
-         return_date = NOW(),
-         equipment_condition = $1,
-         return_notes = $2,
-         return_confirmed_by = $3,
-         status = 'returned'
-     WHERE id = $4 
-     RETURNING *`,
-    [JSON.stringify(equipmentCondition), returnNotes, technicianId, borrowingId]
-  );
-  
-  return result.rows[0];
-}
+  // ✅ FIXED: markAsReturned method with proper validation and error handling
+  static async markAsReturned(borrowingId, returnData, confirmedByUserId) {
+    const { equipmentCondition, returnNotes } = returnData;
+    
+    console.log('=== MARK AS RETURNED METHOD CALLED ===');
+    console.log('Borrowing ID:', borrowingId);
+    console.log('Equipment Condition:', equipmentCondition);
+    console.log('Return Notes:', returnNotes);
+    console.log('Confirmed By User ID:', confirmedByUserId);
+    
+    // ✅ VALIDATE: Check if required data exists
+    if (!borrowingId) {
+      throw new Error('Borrowing ID is required');
+    }
+    
+    if (!equipmentCondition) {
+      throw new Error('Equipment condition data is required');
+    }
+    
+    if (!confirmedByUserId) {
+      throw new Error('Confirmed by user ID is required');
+    }
 
-static async getActiveBorrowings() {
-  const result = await db.query(
-    `SELECT b.*, u.name as borrower_name, u.email as borrower_email,
-            tech.name as technician_name
-     FROM borrowings b
-     JOIN users u ON b.borrower_id = u.id
-     LEFT JOIN users tech ON b.technician_id = tech.id
-     WHERE b.status = 'approved' AND b.returned = false
-     ORDER BY b.created_at DESC`
-  );
-  
-  return result.rows.map(row => ({
-    ...row,
-    chemicals: typeof row.chemicals === 'string' ? JSON.parse(row.chemicals) : row.chemicals || [],
-    equipment: typeof row.equipment === 'string' ? JSON.parse(row.equipment) : row.equipment || []
-  }));
-}
+    // ✅ VALIDATE: Check if equipmentCondition is an object
+    if (typeof equipmentCondition !== 'object' || equipmentCondition === null) {
+      throw new Error('Equipment condition must be a valid object');
+    }
+
+    try {
+      const result = await db.query(
+        `UPDATE borrowings 
+         SET returned = true,
+             actual_return_date = NOW(),
+             equipment_condition = $1,
+             return_notes = $2,
+             return_confirmed_by = $3,
+             status = 'returned',
+             updated_at = NOW()
+         WHERE id = $4 
+         RETURNING *`,
+        [
+          JSON.stringify(equipmentCondition), 
+          returnNotes || '', 
+          confirmedByUserId, 
+          borrowingId
+        ]
+      );
+      
+      console.log('Database update result rows:', result.rows.length);
+
+      if (result.rows.length === 0) {
+        throw new Error('Borrowing not found');
+      }
+      
+      const row = result.rows[0];
+      console.log('Successfully updated borrowing:', row);
+      
+      return {
+        ...row,
+        chemicals: typeof row.chemicals === 'string' ? JSON.parse(row.chemicals) : row.chemicals || [],
+        equipment: typeof row.equipment === 'string' ? JSON.parse(row.equipment) : row.equipment || [],
+        equipment_condition: row.equipment_condition ? 
+          (typeof row.equipment_condition === 'string' ? JSON.parse(row.equipment_condition) : row.equipment_condition) : null
+      };
+    } catch (error) {
+      console.error('Database error in markAsReturned:', error);
+      throw new Error(`Database operation failed: ${error.message}`);
+    }
+  }
+
+  // ✅ FIXED: getActiveBorrowings method
+  static async getActiveBorrowings() {
+    try {
+      const result = await db.query(
+        `SELECT b.*, 
+                u.name as borrower_name, 
+                u.email as borrower_email,
+                tech.name as technician_name
+         FROM borrowings b
+         JOIN users u ON b.borrower_id = u.id
+         LEFT JOIN users tech ON b.technician_id = tech.id
+         WHERE b.status = 'approved' 
+         AND b.returned = false
+         ORDER BY b.created_at DESC`
+      );
+      
+      return result.rows.map(row => ({
+        ...row,
+        chemicals: typeof row.chemicals === 'string' ? JSON.parse(row.chemicals) : row.chemicals || [],
+        equipment: typeof row.equipment === 'string' ? JSON.parse(row.equipment) : row.equipment || [],
+        equipment_condition: row.equipment_condition ? 
+          (typeof row.equipment_condition === 'string' ? JSON.parse(row.equipment_condition) : row.equipment_condition) : null
+      }));
+    } catch (error) {
+      console.error('Error fetching active borrowings:', error);
+      throw error;
+    }
+  }
 
   static async getOverdue() {
     try {
@@ -381,7 +455,10 @@ static async getActiveBorrowings() {
         current_year: row.current_year,
         semester: row.semester,
         borrower_email: row.borrower_email,
-        borrower_contact: row.borrower_contact
+        borrower_contact: row.borrower_contact,
+        // ✅ Parse equipment_condition if it exists
+        equipment_condition: row.equipment_condition ? 
+          (typeof row.equipment_condition === 'string' ? JSON.parse(row.equipment_condition) : row.equipment_condition) : null
       }));
       
       return overdueBorrowings;

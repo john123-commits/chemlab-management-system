@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:chemlab_frontend/models/borrowing.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
+import 'package:logger/logger.dart';
+
+var logger = Logger();
 
 class BorrowingReturnScreen extends StatefulWidget {
   final Borrowing borrowing;
@@ -28,17 +31,31 @@ class _BorrowingReturnScreenState extends State<BorrowingReturnScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
   Future<void> _submitReturn() async {
     setState(() => _isLoading = true);
 
     try {
-      await ApiService.markBorrowingAsReturned(
+      // ✅ DEBUG: Log the data being sent
+      logger.d('=== RETURN SUBMISSION DEBUG ===');
+      logger.d('Borrowing ID: ${widget.borrowing.id}');
+      logger.d('Equipment Conditions: $_equipmentConditions');
+      logger.d('Return Notes: ${_notesController.text.trim()}');
+
+      final result = await ApiService.markBorrowingAsReturned(
         widget.borrowing.id,
         {
           'equipmentCondition': _equipmentConditions,
           'returnNotes': _notesController.text.trim(),
         },
       );
+
+      logger.d('Return API result: $result');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -48,6 +65,10 @@ class _BorrowingReturnScreenState extends State<BorrowingReturnScreen> {
         Navigator.pop(context, true); // Return true to indicate success
       }
     } catch (error) {
+      logger.e('=== RETURN ERROR ===');
+      logger.e('Failed to mark as returned: $error');
+      logger.e('Error type: ${error.runtimeType}');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -120,7 +141,7 @@ class _BorrowingReturnScreenState extends State<BorrowingReturnScreen> {
 
                       // Condition Selection
                       DropdownButtonFormField<String>(
-                        initialValue: condition['status'],
+                        value: condition['status'],
                         decoration: const InputDecoration(
                           labelText: 'Condition',
                           border: OutlineInputBorder(),

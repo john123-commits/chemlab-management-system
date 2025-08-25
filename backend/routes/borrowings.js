@@ -1,6 +1,9 @@
 const express = require('express');
 const Borrowing = require('../models/Borrowing');
+const Equipment = require('../models/Equipment'); // ✅ Added Equipment import
 const { authenticateToken, requireAdminOrTechnician } = require('../middleware/auth');
+const { logger } = require('../utils/logger'); // ✅ Added logger import
+
 const router = express.Router();
 
 // Get all borrowings - Allow borrowers to see their own requests
@@ -31,7 +34,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const borrowings = await Borrowing.findAll(filters);
     res.json(borrowings);
   } catch (error) {
-    console.error('Error in Borrowing.findAll:', error);
+    logger.error('Error in Borrowing.findAll:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -52,7 +55,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     
     res.json(borrowing);
   } catch (error) {
-    console.error('Error in Borrowing.findById:', error);
+    logger.error('Error in Borrowing.findById:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -67,7 +70,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const borrowing = await Borrowing.create(borrowingData);
     res.status(201).json(borrowing);
   } catch (error) {
-    console.error('Error in Borrowing.create:', error);
+    logger.error('Error in Borrowing.create:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -114,7 +117,7 @@ router.put('/:id/status', authenticateToken, requireAdminOrTechnician, async (re
     
     res.json(updatedBorrowing);
   } catch (error) {
-    console.error('Error updating borrowing status:', error);
+    logger.error('Error updating borrowing status:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -125,7 +128,7 @@ router.get('/pending/count', authenticateToken, requireAdminOrTechnician, async 
     const count = await Borrowing.getPendingRequestsCount();
     res.json({ count });
   } catch (error) {
-    console.error('Error in Borrowing.getPendingRequestsCount:', error);
+    logger.error('Error in Borrowing.getPendingRequestsCount:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -136,44 +139,80 @@ router.get('/pending', authenticateToken, requireAdminOrTechnician, async (req, 
     const pendingRequests = await Borrowing.getPendingRequests();
     res.json(pendingRequests);
   } catch (error) {
-    console.error('Error in Borrowing.getPendingRequests:', error);
+    logger.error('Error in Borrowing.getPendingRequests:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
+// ✅ FIXED: Mark borrowing as returned with proper error handling
 router.post('/:id/return', authenticateToken, requireAdminOrTechnician, async (req, res) => {
   try {
     const { equipmentCondition, returnNotes } = req.body;
     const borrowingId = req.params.id;
-    const technicianId = req.user.userId;
+    const confirmedByUserId = req.user.userId;
     
+    logger.debug('=== RETURN REQUEST RECEIVED ===');
+    logger.debug('Borrowing ID:', borrowingId);
+    logger.debug('Equipment Condition:', equipmentCondition);
+    logger.debug('Return Notes:', returnNotes);
+    logger.debug('Confirmed By User ID:', confirmedByUserId);
+    
+    // ✅ VALIDATE: Check if required data exists
+    if (!equipmentCondition) {
+      logger.error('Equipment condition data is missing');
+      return res.status(400).json({ 
+        error: 'Equipment condition data is required' 
+      });
+    }
+
+    // ✅ VALIDATE: Check if equipmentCondition is an object
+    if (typeof equipmentCondition !== 'object' || equipmentCondition === null) {
+      logger.error('Equipment condition must be an object');
+      return res.status(400).json({ 
+        error: 'Equipment condition must be a valid object' 
+      });
+    }
+
+    // Mark borrowing as returned
     const updatedBorrowing = await Borrowing.markAsReturned(
       borrowingId, 
       { equipmentCondition, returnNotes }, 
-      technicianId
+      confirmedByUserId
     );
     
-    // Update equipment quantities back in inventory
-    for (const [equipmentId, condition] of Object.entries(equipmentCondition)) {
-      // Update equipment status/condition in inventory
-      await Equipment.updateCondition(equipmentId, condition.status);
+    // ✅ Update equipment quantities back in inventory (if Equipment model exists)
+    try {
+      if (typeof Equipment !== 'undefined' && Equipment.updateCondition) {
+        for (const [equipmentId, condition] of Object.entries(equipmentCondition)) {
+          // Update equipment status/condition in inventory
+          await Equipment.updateCondition(equipmentId, condition.status);
+        }
+      }
+    } catch (equipmentError) {
+      logger.warn('Warning: Could not update equipment inventory:', equipmentError);
+      // Don't fail the whole operation if equipment update fails
     }
     
+    logger.debug('Successfully updated borrowing:', updatedBorrowing);
     res.json(updatedBorrowing);
   } catch (error) {
-    console.error('Error marking borrowing as returned:', error);
-    res.status(500).json({ error: error.message });
+    logger.error('Error marking borrowing as returned:', error);
+    res.status(500).json({ 
+      error: `Failed to mark borrowing as returned: ${error.message}` 
+    });
   }
 });
 
-// Get active (not returned) borrowings
+// ✅ FIXED: Get active (not returned) borrowings
 router.get('/active', authenticateToken, requireAdminOrTechnician, async (req, res) => {
   try {
+    logger.debug('Fetching active borrowings for user:', req.user.userId);
     const borrowings = await Borrowing.getActiveBorrowings();
+    logger.debug('Found active borrowings:', borrowings.length);
     res.json(borrowings);
   } catch (error) {
-    console.error('Error fetching active borrowings:', error);
-    res.status(500).json({ error: error.message });
+    logger.error('Error fetching active borrowings:', error);
+    res.status(500).json({ error: `Failed to load active borrowings: ${error.message}` });
   }
 });
 
