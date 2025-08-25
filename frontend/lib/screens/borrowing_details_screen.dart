@@ -4,6 +4,7 @@ import 'package:chemlab_frontend/models/borrowing.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:intl/intl.dart';
+import 'package:chemlab_frontend/screens/borrowing_return_screen.dart'; // ✅ Added import
 
 class BorrowingDetailsScreen extends StatefulWidget {
   final Borrowing borrowing;
@@ -73,7 +74,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
     }
   }
 
-  // ✅ NEW: Mark as Returned Method
+  // ✅ FIXED: Mark as Returned Method - Navigate to Return Screen
   Future<void> _markAsReturned() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -81,7 +82,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
         title: const Text('Mark as Returned'),
         content: const Text(
             'Are you sure you want to mark this borrowing as returned? '
-            'This will open the return confirmation form.'),
+            'You will need to assess the condition of each equipment item.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -96,14 +97,24 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
     );
 
     if (confirmed == true && mounted) {
-      // Navigate to return confirmation screen
-      // For now, show a simple success message
-      // You can implement a full return confirmation form later
-      if (mounted) {
+      // ✅ FIXED: Navigate to your BorrowingReturnScreen
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              BorrowingReturnScreen(borrowing: widget.borrowing),
+        ),
+      );
+
+      // Handle the result from the return screen
+      if (result == true && mounted) {
+        // Successfully returned - show success message and refresh
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Return functionality to be implemented')),
+              content: Text('Borrowing marked as returned successfully')),
         );
+        // Pop back to the previous screen with true to indicate update
+        Navigator.pop(context, true);
       }
     }
   }
@@ -533,7 +544,7 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed:
-                                _markAsReturned, // ✅ NEW: Mark as returned
+                                _markAsReturned, // ✅ FIXED: Mark as returned
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.blue,
                               foregroundColor: Colors.white,
