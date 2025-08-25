@@ -1,8 +1,7 @@
 const express = require('express');
 const Borrowing = require('../models/Borrowing');
-const Equipment = require('../models/Equipment'); // ✅ Added Equipment import
+const Equipment = require('../models/Equipment'); // ✅ Keep Equipment import
 const { authenticateToken, requireAdminOrTechnician } = require('../middleware/auth');
-const { logger } = require('../utils/logger'); // ✅ Added logger import
 
 const router = express.Router();
 
@@ -34,7 +33,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const borrowings = await Borrowing.findAll(filters);
     res.json(borrowings);
   } catch (error) {
-    logger.error('Error in Borrowing.findAll:', error);
+    console.error('Error in Borrowing.findAll:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -55,7 +54,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     
     res.json(borrowing);
   } catch (error) {
-    logger.error('Error in Borrowing.findById:', error);
+    console.error('Error in Borrowing.findById:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -70,7 +69,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const borrowing = await Borrowing.create(borrowingData);
     res.status(201).json(borrowing);
   } catch (error) {
-    logger.error('Error in Borrowing.create:', error);
+    console.error('Error in Borrowing.create:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -117,7 +116,7 @@ router.put('/:id/status', authenticateToken, requireAdminOrTechnician, async (re
     
     res.json(updatedBorrowing);
   } catch (error) {
-    logger.error('Error updating borrowing status:', error);
+    console.error('Error updating borrowing status:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -128,7 +127,7 @@ router.get('/pending/count', authenticateToken, requireAdminOrTechnician, async 
     const count = await Borrowing.getPendingRequestsCount();
     res.json({ count });
   } catch (error) {
-    logger.error('Error in Borrowing.getPendingRequestsCount:', error);
+    console.error('Error in Borrowing.getPendingRequestsCount:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -139,7 +138,7 @@ router.get('/pending', authenticateToken, requireAdminOrTechnician, async (req, 
     const pendingRequests = await Borrowing.getPendingRequests();
     res.json(pendingRequests);
   } catch (error) {
-    logger.error('Error in Borrowing.getPendingRequests:', error);
+    console.error('Error in Borrowing.getPendingRequests:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -151,15 +150,15 @@ router.post('/:id/return', authenticateToken, requireAdminOrTechnician, async (r
     const borrowingId = req.params.id;
     const confirmedByUserId = req.user.userId;
     
-    logger.debug('=== RETURN REQUEST RECEIVED ===');
-    logger.debug('Borrowing ID:', borrowingId);
-    logger.debug('Equipment Condition:', equipmentCondition);
-    logger.debug('Return Notes:', returnNotes);
-    logger.debug('Confirmed By User ID:', confirmedByUserId);
+    console.log('=== RETURN REQUEST RECEIVED ===');
+    console.log('Borrowing ID:', borrowingId);
+    console.log('Equipment Condition:', equipmentCondition);
+    console.log('Return Notes:', returnNotes);
+    console.log('Confirmed By User ID:', confirmedByUserId);
     
     // ✅ VALIDATE: Check if required data exists
     if (!equipmentCondition) {
-      logger.error('Equipment condition data is missing');
+      console.error('Equipment condition data is missing');
       return res.status(400).json({ 
         error: 'Equipment condition data is required' 
       });
@@ -167,7 +166,7 @@ router.post('/:id/return', authenticateToken, requireAdminOrTechnician, async (r
 
     // ✅ VALIDATE: Check if equipmentCondition is an object
     if (typeof equipmentCondition !== 'object' || equipmentCondition === null) {
-      logger.error('Equipment condition must be an object');
+      console.error('Equipment condition must be an object');
       return res.status(400).json({ 
         error: 'Equipment condition must be a valid object' 
       });
@@ -189,14 +188,14 @@ router.post('/:id/return', authenticateToken, requireAdminOrTechnician, async (r
         }
       }
     } catch (equipmentError) {
-      logger.warn('Warning: Could not update equipment inventory:', equipmentError);
+      console.warn('Warning: Could not update equipment inventory:', equipmentError);
       // Don't fail the whole operation if equipment update fails
     }
     
-    logger.debug('Successfully updated borrowing:', updatedBorrowing);
+    console.log('Successfully updated borrowing:', updatedBorrowing);
     res.json(updatedBorrowing);
   } catch (error) {
-    logger.error('Error marking borrowing as returned:', error);
+    console.error('Error marking borrowing as returned:', error);
     res.status(500).json({ 
       error: `Failed to mark borrowing as returned: ${error.message}` 
     });
@@ -206,12 +205,12 @@ router.post('/:id/return', authenticateToken, requireAdminOrTechnician, async (r
 // ✅ FIXED: Get active (not returned) borrowings
 router.get('/active', authenticateToken, requireAdminOrTechnician, async (req, res) => {
   try {
-    logger.debug('Fetching active borrowings for user:', req.user.userId);
+    console.log('Fetching active borrowings for user:', req.user.userId);
     const borrowings = await Borrowing.getActiveBorrowings();
-    logger.debug('Found active borrowings:', borrowings.length);
+    console.log('Found active borrowings:', borrowings.length);
     res.json(borrowings);
   } catch (error) {
-    logger.error('Error fetching active borrowings:', error);
+    console.error('Error fetching active borrowings:', error);
     res.status(500).json({ error: `Failed to load active borrowings: ${error.message}` });
   }
 });
