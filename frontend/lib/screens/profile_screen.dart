@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
-import 'package:chemlab_frontend/services/api_service.dart'; // ✅ Add this import
+import 'package:chemlab_frontend/services/api_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -12,17 +12,25 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _passwordFormKey = GlobalKey<FormState>(); // ✅ Add this
+  final _passwordFormKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _emailController;
-  // ✅ Add password controllers
+  // Add controllers for enhanced fields
+  late TextEditingController _phoneController;
+  late TextEditingController _studentIdController;
+  late TextEditingController _institutionController;
+  late TextEditingController _departmentController;
+  late TextEditingController _educationLevelController;
+  late TextEditingController _semesterController;
+
   final TextEditingController _currentPasswordController =
       TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmNewPasswordController =
       TextEditingController();
+
   bool _isEditing = false;
-  bool _isChangingPassword = false; // ✅ Add this
+  bool _isChangingPassword = false;
 
   @override
   void initState() {
@@ -30,13 +38,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = Provider.of<AuthProvider>(context, listen: false).user!;
     _nameController = TextEditingController(text: user.name);
     _emailController = TextEditingController(text: user.email);
+    // Initialize enhanced field controllers
+    _phoneController = TextEditingController(text: user.phone ?? '');
+    _studentIdController = TextEditingController(text: user.studentId ?? '');
+    _institutionController =
+        TextEditingController(text: user.institution ?? '');
+    _departmentController = TextEditingController(text: user.department ?? '');
+    _educationLevelController =
+        TextEditingController(text: user.educationLevel ?? '');
+    _semesterController = TextEditingController(text: user.semester ?? '');
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    // ✅ Dispose password controllers
+    // Dispose enhanced field controllers
+    _phoneController.dispose();
+    _studentIdController.dispose();
+    _institutionController.dispose();
+    _departmentController.dispose();
+    _educationLevelController.dispose();
+    _semesterController.dispose();
+    // Dispose password controllers
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmNewPasswordController.dispose();
@@ -52,7 +76,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: const Text('Profile'),
         actions: [
-          if (!_isEditing && !_isChangingPassword) // ✅ Update this condition
+          if (!_isEditing && !_isChangingPassword)
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: () {
@@ -90,6 +114,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (!_isEditing && !_isChangingPassword) ...[
                       _buildInfoCard('Name', user.name),
                       _buildInfoCard('Email', user.email),
+                      // Display enhanced information
+                      if (user.phone != null && user.phone!.isNotEmpty)
+                        _buildInfoCard('Phone', user.phone!),
+                      if (user.studentId != null && user.studentId!.isNotEmpty)
+                        _buildInfoCard('Student ID', user.studentId!),
+                      if (user.institution != null &&
+                          user.institution!.isNotEmpty)
+                        _buildInfoCard('Institution', user.institution!),
+                      if (user.department != null &&
+                          user.department!.isNotEmpty)
+                        _buildInfoCard('Department', user.department!),
+                      if (user.educationLevel != null &&
+                          user.educationLevel!.isNotEmpty)
+                        _buildInfoCard('Education Level', user.educationLevel!),
+                      if (user.semester != null && user.semester!.isNotEmpty)
+                        _buildInfoCard('Semester', user.semester!),
                       _buildInfoCard(
                         'Role',
                         user.role.toUpperCase(),
@@ -100,7 +140,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         '${user.createdAt.day}/${user.createdAt.month}/${user.createdAt.year}',
                       ),
                       const SizedBox(height: 16),
-                      // ✅ Add Change Password Button
                       ElevatedButton(
                         onPressed: () {
                           setState(() {
@@ -112,7 +151,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ] else if (_isEditing)
                       _buildEditForm(authProvider)
                     else if (_isChangingPassword)
-                      _buildPasswordChangeForm(authProvider), // ✅ Add this
+                      _buildPasswordChangeForm(authProvider),
                   ],
                 ),
               ),
@@ -191,6 +230,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
               return null;
             },
           ),
+          const SizedBox(height: 16),
+          // Enhanced fields for editing
+          TextFormField(
+            controller: _phoneController,
+            decoration: const InputDecoration(
+              labelText: 'Phone',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _studentIdController,
+            decoration: const InputDecoration(
+              labelText: 'Student ID',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _institutionController,
+            decoration: const InputDecoration(
+              labelText: 'Institution',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _departmentController,
+            decoration: const InputDecoration(
+              labelText: 'Department',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _educationLevelController,
+            decoration: const InputDecoration(
+              labelText: 'Education Level',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _semesterController,
+            decoration: const InputDecoration(
+              labelText: 'Semester',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -231,7 +319,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ✅ Add this new method for password change form
   Widget _buildPasswordChangeForm(AuthProvider authProvider) {
     return Form(
       key: _passwordFormKey,
@@ -323,7 +410,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: () async {
                   if (_passwordFormKey.currentState!.validate()) {
                     try {
-                      // ✅ Call your API to change password
                       await ApiService.changePassword({
                         'current_password': _currentPasswordController.text,
                         'new_password': _newPasswordController.text,

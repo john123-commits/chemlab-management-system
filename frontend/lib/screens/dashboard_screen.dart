@@ -182,13 +182,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Welcome Header
+                        // Welcome Header with User Info
                         Text(
                           isTechnician
                               ? 'Technician Dashboard'
                               : 'Admin Dashboard',
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
+                        const SizedBox(height: 8),
+
+                        // ✅ Enhanced User Information Display
+                        _buildUserInfoCard(),
                         const SizedBox(height: 24),
 
                         // Pending Requests Alert
@@ -525,7 +529,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       'Borrower Dashboard',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
+                    const SizedBox(height: 8),
+
+                    // ✅ Enhanced User Information Display for Borrowers
+                    _buildUserInfoCard(),
                     const SizedBox(height: 24),
+
                     Card(
                       elevation: 4,
                       child: Padding(
@@ -667,6 +676,93 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
         ),
+      ),
+    );
+  }
+
+  // ✅ New method to build user information card
+  Widget _buildUserInfoCard() {
+    final user = Provider.of<AuthProvider>(context, listen: false).user!;
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'User Information',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildUserDetailRow('Name', user.name),
+            _buildUserDetailRow('Email', user.email),
+            if (user.phone != null && user.phone!.isNotEmpty)
+              _buildUserDetailRow('Phone', user.phone!),
+            if (user.studentId != null && user.studentId!.isNotEmpty)
+              _buildUserDetailRow('Student ID', user.studentId!),
+            if (user.institution != null && user.institution!.isNotEmpty)
+              _buildUserDetailRow('Institution', user.institution!),
+            if (user.department != null && user.department!.isNotEmpty)
+              _buildUserDetailRow('Department', user.department!),
+            if (user.educationLevel != null && user.educationLevel!.isNotEmpty)
+              _buildUserDetailRow('Education Level', user.educationLevel!),
+            if (user.semester != null && user.semester!.isNotEmpty)
+              _buildUserDetailRow('Semester', user.semester!),
+            _buildUserDetailRow(
+              'Role',
+              user.role.toUpperCase(),
+              isHighlighted: true,
+            ),
+            _buildUserDetailRow(
+              'Member Since',
+              '${user.createdAt.day}/${user.createdAt.month}/${user.createdAt.year}',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ✅ Helper method to build user detail rows
+  Widget _buildUserDetailRow(String label, String value,
+      {bool isHighlighted = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal,
+                color: isHighlighted
+                    ? (value == 'ADMIN'
+                        ? Colors.red
+                        : value == 'TECHNICIAN'
+                            ? Colors.green
+                            : Colors.blue)
+                    : Colors.black,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

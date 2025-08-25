@@ -103,19 +103,32 @@ class ApiService {
     }
   }
 
-  // SECURE REGISTRATION - Only allows borrower registration
+  // ✅ ENHANCED SECURE REGISTRATION - With all institutional fields
   static Future<Map<String, dynamic>> register({
     required String name,
     required String email,
     required String password,
+    // New institutional fields
+    required String phone,
+    required String studentId,
+    required String institution,
+    required String department,
+    required String educationLevel,
+    required String semester,
     required String role,
   }) async {
     // SECURITY FIX: Only allow borrower registration through public endpoint
     const secureRole = 'borrower'; // Force borrower role
 
-    logger.d('=== API SERVICE REGISTER ATTEMPT ===');
+    logger.d('=== API SERVICE ENHANCED REGISTER ATTEMPT ===');
     logger.d('Name: $name');
     logger.d('Email: $email');
+    logger.d('Phone: $phone');
+    logger.d('Student ID: $studentId');
+    logger.d('Institution: $institution');
+    logger.d('Department: $department');
+    logger.d('Education Level: $educationLevel');
+    logger.d('Semester: $semester');
     logger.d('Role (forced): $secureRole');
 
     final response = await http.post(
@@ -125,6 +138,12 @@ class ApiService {
         'name': name,
         'email': email,
         'password': password,
+        'phone': phone,
+        'studentId': studentId,
+        'institution': institution,
+        'department': department,
+        'educationLevel': educationLevel,
+        'semester': semester,
         'role': secureRole, // Always use borrower role
       }),
     );
@@ -155,7 +174,7 @@ class ApiService {
     }
 
     logger.d('=== API SERVICE CREATE STAFF USER ===');
-    logger.d('Staff user  $userData');
+    logger.d('Staff user data: $userData');
 
     final response = await http.post(
       Uri.parse('$baseUrl/auth/register/staff'), // Admin-only endpoint
@@ -572,7 +591,7 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final rawData = jsonDecode(response.body);
-      logger.d('Raw lecture schedule  $rawData');
+      logger.d('Raw lecture schedule data: $rawData');
 
       // Debug the chemical and equipment data types
       logger.d('Chemicals type: ${rawData['required_chemicals'].runtimeType}');
@@ -601,8 +620,8 @@ class ApiService {
     };
 
     logger.d('=== API SERVICE CREATE LECTURE SCHEDULE ===');
-    logger.d('Original schedule  $scheduleData');
-    logger.d('Formatted schedule  $formattedData');
+    logger.d('Original schedule data: $scheduleData');
+    logger.d('Formatted schedule data: $formattedData');
 
     final response = await http.post(
       Uri.parse('$baseUrl/lecture-schedules'),

@@ -48,6 +48,12 @@ class AuthProvider with ChangeNotifier {
     required String email,
     required String password,
     required String role,
+    required String phone,
+    required String studentId,
+    required String institution,
+    required String educationLevel,
+    required String semester,
+    required String department,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -60,11 +66,18 @@ class AuthProvider with ChangeNotifier {
 
       logger.d('AuthProvider: Registering as borrower (forced)');
 
+      // FIXED: Send all enhanced user information
       await ApiService.register(
         name: name,
         email: email,
         password: password,
-        role: secureRole, // Always use borrower role for public registration
+        role: secureRole,
+        phone: phone,
+        studentId: studentId,
+        institution: institution,
+        educationLevel: educationLevel,
+        semester: semester,
+        department: department,
       );
 
       logger.d('AuthProvider: Registration successful for $email');

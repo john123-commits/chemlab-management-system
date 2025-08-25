@@ -36,24 +36,8 @@ const login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     console.log('Password match result:', isMatch);
     
-    // Test with known password
-    const testMatch = await bcrypt.compare('password123', user.password);
-    console.log('Test with "password123":', testMatch);
-    
     if (!isMatch) {
       console.log('=== LOGIN FAILED: PASSWORD MISMATCH ===');
-      
-      // Test with trimmed password
-      const trimmedPassword = password.trim();
-      if (trimmedPassword !== password) {
-        console.log('Testing with trimmed password...');
-        const trimmedMatch = await bcrypt.compare(trimmedPassword, user.password);
-        console.log('Trimmed password match:', trimmedMatch);
-        if (trimmedMatch) {
-          console.log('SUCCESS: Password matched after trimming!');
-        }
-      }
-      
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -81,7 +65,105 @@ const login = async (req, res) => {
   }
 };
 
-// ✅ THIS IS THE CRITICAL PART - EXPORT THE FUNCTION
+// ✅ ENHANCED REGISTRATION FUNCTION
+const register = async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      phone,
+      studentId,
+      institution,
+      department,
+      educationLevel,
+      semester
+    } = req.body;
+    
+    console.log('=== ENHANCED REGISTRATION ATTEMPT ===');
+    console.log('Registration data:', {
+      name,
+      email,
+      phone,
+      studentId,
+      institution,
+      department,
+      educationLevel,
+      semester
+    });
+
+    // Validate required fields
+    if (!name || !email || !password) {
+      console.log('Registration failed: Missing required fields');
+      return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      console.log('Registration failed: Weak password');
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    // Check if user exists
+    const existingUser = await User.findByEmail(email);
+    if (existingUser) {
+      console.log('Registration failed: User already exists');
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    // Hash password
+    console.log('Hashing password...');
+    const hashedPassword = await bcrypt.hash(password, 10);
+    console.log('Password hashed successfully');
+
+    // Create user with all institutional fields
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      phone,
+      student_id: studentId,
+      institution,
+      department,
+      education_level: educationLevel,
+      semester,
+      role: 'borrower' // Force borrower role for public registration
+    });
+    
+    console.log('User created successfully:', user.id);
+
+    // Generate token
+    const token = jwt.sign(
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('Token generated successfully');
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        studentId: user.student_id,
+        institution: user.institution,
+        department: user.department,
+        educationLevel: user.education_level,
+        semester: user.semester
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ✅ EXPORT BOTH FUNCTIONS
 module.exports = {
-  login
+  login,
+  register
 };
