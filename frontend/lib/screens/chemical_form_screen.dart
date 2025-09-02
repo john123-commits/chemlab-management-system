@@ -22,9 +22,26 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
   final _quantityController = TextEditingController();
   final _unitController = TextEditingController();
   final _storageLocationController = TextEditingController();
+  // Enhanced controllers
+  final _cNumberController = TextEditingController();
+  final _molecularFormulaController = TextEditingController();
+  final _molecularWeightController = TextEditingController();
+  final _phicalStateController = TextEditingController();
+  final _colorController = TextEditingController();
+  final _densityController = TextEditingController();
+  final _meltingPointController = TextEditingController();
+  final _boilingPointController = TextEditingController();
+  final _solubilityController = TextEditingController();
+  final _storageConditionsController = TextEditingController();
+  final _hazardClassController = TextEditingController();
+  final _safetyPrecautionsController = TextEditingController();
+  final _safetyInfoController = TextEditingController();
+  final _msdsLinkController = TextEditingController();
+
   DateTime? _expiryDate;
   String? _safetyDataSheetPath;
   bool _isLoading = false;
+  bool _showAdvancedFields = false; // Toggle for advanced fields
 
   @override
   void initState() {
@@ -37,6 +54,25 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
       _storageLocationController.text = widget.chemical!.storageLocation;
       _expiryDate = widget.chemical!.expiryDate;
       _safetyDataSheetPath = widget.chemical!.safetyDataSheet;
+      // Enhanced fields
+      _cNumberController.text = widget.chemical!.cNumber ?? '';
+      _molecularFormulaController.text =
+          widget.chemical!.molecularFormula ?? '';
+      _molecularWeightController.text =
+          widget.chemical!.molecularWeight?.toString() ?? '';
+      _phicalStateController.text = widget.chemical!.phicalState ?? '';
+      _colorController.text = widget.chemical!.color ?? '';
+      _densityController.text = widget.chemical!.density?.toString() ?? '';
+      _meltingPointController.text = widget.chemical!.meltingPoint ?? '';
+      _boilingPointController.text = widget.chemical!.boilingPoint ?? '';
+      _solubilityController.text = widget.chemical!.solubility ?? '';
+      _storageConditionsController.text =
+          widget.chemical!.storageConditions ?? '';
+      _hazardClassController.text = widget.chemical!.hazardClass ?? '';
+      _safetyPrecautionsController.text =
+          widget.chemical!.safetyPrecautions ?? '';
+      _safetyInfoController.text = widget.chemical!.safetyInfo ?? '';
+      _msdsLinkController.text = widget.chemical!.msdsLink ?? '';
     }
   }
 
@@ -47,6 +83,21 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
     _quantityController.dispose();
     _unitController.dispose();
     _storageLocationController.dispose();
+    // Enhanced controllers
+    _cNumberController.dispose();
+    _molecularFormulaController.dispose();
+    _molecularWeightController.dispose();
+    _phicalStateController.dispose();
+    _colorController.dispose();
+    _densityController.dispose();
+    _meltingPointController.dispose();
+    _boilingPointController.dispose();
+    _solubilityController.dispose();
+    _storageConditionsController.dispose();
+    _hazardClassController.dispose();
+    _safetyPrecautionsController.dispose();
+    _safetyInfoController.dispose();
+    _msdsLinkController.dispose();
     super.dispose();
   }
 
@@ -76,14 +127,38 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
           throw Exception('Quantity cannot be negative: $quantity');
         }
 
+        // Parse enhanced numeric fields
+        double? parseDouble(String value) {
+          if (value.isEmpty) return null;
+          return double.tryParse(value);
+        }
+
         final chemicalData = {
           'name': _nameController.text.trim(),
           'category': _categoryController.text.trim(),
           'quantity': quantity,
           'unit': _unitController.text.trim(),
           'storage_location': _storageLocationController.text.trim(),
-          'expiry_date': DateFormat('yyyy-MM-dd').format(_expiryDate!),
+          'expiry_date': _expiryDate != null
+              ? DateFormat('yyyy-MM-dd').format(_expiryDate!)
+              : DateTime.now().add(Duration(days: 365)).toIso8601String(),
           'safety_data_sheet': _safetyDataSheetPath,
+          // Enhanced fields
+          'c_number': _cNumberController.text.trim(),
+          'molecular_formula': _molecularFormulaController.text.trim(),
+          'molecular_weight':
+              parseDouble(_molecularWeightController.text.trim()),
+          'phical_state': _phicalStateController.text.trim(),
+          'color': _colorController.text.trim(),
+          'density': parseDouble(_densityController.text.trim()),
+          'melting_point': _meltingPointController.text.trim(),
+          'boiling_point': _boilingPointController.text.trim(),
+          'solubility': _solubilityController.text.trim(),
+          'storage_conditions': _storageConditionsController.text.trim(),
+          'hazard_class': _hazardClassController.text.trim(),
+          'safety_precautions': _safetyPrecautionsController.text.trim(),
+          'safety_info': _safetyInfoController.text.trim(),
+          'msds_link': _msdsLinkController.text.trim(),
         };
 
         if (widget.chemical == null) {
@@ -160,7 +235,7 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
-                  labelText: 'Chemical Name',
+                  labelText: 'Chemical Name *',
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) {
@@ -174,7 +249,7 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
               TextFormField(
                 controller: _categoryController,
                 decoration: const InputDecoration(
-                  labelText: 'Category',
+                  labelText: 'Category *',
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) {
@@ -191,7 +266,7 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
                     child: TextFormField(
                       controller: _quantityController,
                       decoration: const InputDecoration(
-                        labelText: 'Quantity',
+                        labelText: 'Quantity *',
                         border: OutlineInputBorder(),
                       ),
                       keyboardType:
@@ -216,7 +291,7 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
                     child: TextFormField(
                       controller: _unitController,
                       decoration: const InputDecoration(
-                        labelText: 'Unit',
+                        labelText: 'Unit *',
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) {
@@ -233,7 +308,7 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
               TextFormField(
                 controller: _storageLocationController,
                 decoration: const InputDecoration(
-                  labelText: 'Storage Location',
+                  labelText: 'Storage Location *',
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) {
@@ -245,7 +320,7 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
               ),
               const SizedBox(height: 16),
               ListTile(
-                title: const Text('Expiry Date'),
+                title: const Text('Expiry Date *'),
                 subtitle: Text(
                   _expiryDate == null
                       ? 'Select expiry date'
@@ -277,6 +352,159 @@ class _ChemicalFormScreenState extends State<ChemicalFormScreen> {
                 trailing: const Icon(Icons.attach_file),
                 onTap: _pickFile,
               ),
+
+              // Advanced Fields Section
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showAdvancedFields = !_showAdvancedFields;
+                  });
+                },
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Advanced Chemical Properties',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                    Icon(
+                      _showAdvancedFields
+                          ? Icons.expand_less
+                          : Icons.expand_more,
+                      color: Colors.blue,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              if (_showAdvancedFields) ...[
+                const Divider(),
+                TextFormField(
+                  controller: _cNumberController,
+                  decoration: const InputDecoration(
+                    labelText: 'CAS Number',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _molecularFormulaController,
+                  decoration: const InputDecoration(
+                    labelText: 'Molecular Formula',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _molecularWeightController,
+                  decoration: const InputDecoration(
+                    labelText: 'Molecular Weight (g/mol)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _phicalStateController,
+                  decoration: const InputDecoration(
+                    labelText: 'Physical State',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _colorController,
+                  decoration: const InputDecoration(
+                    labelText: 'Color',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _densityController,
+                  decoration: const InputDecoration(
+                    labelText: 'Density (g/cm³)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _meltingPointController,
+                  decoration: const InputDecoration(
+                    labelText: 'Melting Point (°C)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _boilingPointController,
+                  decoration: const InputDecoration(
+                    labelText: 'Boiling Point (°C)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _solubilityController,
+                  decoration: const InputDecoration(
+                    labelText: 'Solubility',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _storageConditionsController,
+                  decoration: const InputDecoration(
+                    labelText: 'Storage Conditions',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _hazardClassController,
+                  decoration: const InputDecoration(
+                    labelText: 'Hazard Class',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _safetyPrecautionsController,
+                  decoration: const InputDecoration(
+                    labelText: 'Safety Precautions',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _safetyInfoController,
+                  decoration: const InputDecoration(
+                    labelText: 'Additional Safety Information',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _msdsLinkController,
+                  decoration: const InputDecoration(
+                    labelText: 'MSDS Link (URL)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,

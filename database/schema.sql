@@ -18,6 +18,25 @@ CREATE TABLE chemicals (
     storage_location VARCHAR(100) NOT NULL,
     expiry_date DATE NOT NULL,
     safety_data_sheet TEXT,
+
+    -- Enhanced chemical properties for chatbot
+    c_number VARCHAR(20), -- CAS Number
+    molecular_formula VARCHAR(100),
+    molecular_weight DECIMAL(10,3),
+    physical_state VARCHAR(20) CHECK (physical_state IN ('solid', 'liquid', 'gas')),
+    color VARCHAR(50),
+    density DECIMAL(10,3),
+    melting_point DECIMAL(8,2),
+    boiling_point DECIMAL(8,2),
+    solubility VARCHAR(200),
+
+    -- Safety information
+    storage_conditions TEXT,
+    hazard_class VARCHAR(100),
+    safety_precautions TEXT,
+    safety_info TEXT,
+    msds_link VARCHAR(500),
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -30,6 +49,16 @@ CREATE TABLE equipment (
     last_maintenance_date DATE NOT NULL,
     location VARCHAR(100) NOT NULL,
     maintenance_schedule INTEGER NOT NULL,
+
+    -- Enhanced equipment details for chatbot
+    serial_number VARCHAR(100),
+    manufacturer VARCHAR(100),
+    model VARCHAR(100),
+    purchase_date DATE,
+    warranty_expiry DATE,
+    calibration_date DATE,
+    next_calibration_date DATE,
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -113,6 +142,91 @@ CREATE TRIGGER update_lecture_schedules_updated_at
     BEFORE UPDATE ON lecture_schedules 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
+
+-- Chat conversations and messages tables for live chat feature
+CREATE TABLE chat_conversations (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    admin_id INTEGER REFERENCES users(id),
+    conversation_type VARCHAR(20) DEFAULT 'bot' CHECK (conversation_type IN ('bot', 'live', 'support')),
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'closed', 'archived')),
+    title VARCHAR(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE chat_messages (
+    id SERIAL PRIMARY KEY,
+    conversation_id INTEGER REFERENCES chat_conversations(id) ON DELETE CASCADE,
+    sender_type VARCHAR(20) NOT NULL CHECK (sender_type IN ('user', 'bot', 'admin', 'technician')),
+    sender_id INTEGER REFERENCES users(id),
+    message_text TEXT NOT NULL,
+    message_type VARCHAR(20) DEFAULT 'text' CHECK (message_type IN ('text', 'file', 'image', 'system')),
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Chat quick actions table
+CREATE TABLE chat_quick_actions (
+    id SERIAL PRIMARY KEY,
+    action_name VARCHAR(50) NOT NULL,
+    display_text VARCHAR(100) NOT NULL,
+    icon VARCHAR(50) NOT NULL,
+    role_required VARCHAR(20) DEFAULT 'borrower' CHECK (role_required IN ('admin', 'technician', 'borrower')),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for chat tables
+CREATE INDEX idx_chat_conversations_user ON chat_conversations(user_id);
+CREATE INDEX idx_chat_conversations_admin ON chat_conversations(admin_id);
+CREATE INDEX idx_chat_conversations_status ON chat_conversations(status);
+CREATE INDEX idx_chat_messages_conversation ON chat_messages(conversation_id);
+CREATE INDEX idx_chat_messages_sender ON chat_messages(sender_id);
+CREATE INDEX idx_chat_messages_created ON chat_messages(created_at);
+CREATE INDEX idx_chat_quick_actions_role ON chat_quick_actions(role_required, is_active);
+
+-- Chat conversation context table for enhanced conversational intelligence
+CREATE TABLE chat_context (
+    id SERIAL PRIMARY KEY,
+    conversation_id INTEGER REFERENCES chat_conversations(id) ON DELETE CASCADE,
+    context_key VARCHAR(100) NOT NULL,
+    context_value TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(conversation_id, context_key)
+);
+
+-- Create indexes for chat context
+CREATE INDEX idx_chat_context_conversation ON chat_context(conversation_id);
+CREATE INDEX idx_chat_context_key ON chat_context(context_key);
+
+-- Create trigger for chat context updated_at
+CREATE TRIGGER update_chat_context_updated_at
+    BEFORE UPDATE ON chat_context
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create trigger for chat conversations updated_at
+CREATE TRIGGER update_chat_conversations_updated_at
+    BEFORE UPDATE ON chat_conversations
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Chatbot audit log table for tracking queries and responses
+CREATE TABLE chatbot_audit_log (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    query_text TEXT NOT NULL,
+    response_text TEXT NOT NULL,
+    query_type VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for chatbot audit log
+CREATE INDEX idx_chatbot_audit_user ON chatbot_audit_log(user_id);
+CREATE INDEX idx_chatbot_audit_type ON chatbot_audit_log(query_type);
+CREATE INDEX idx_chatbot_audit_created ON chatbot_audit_log(created_at);
 
 -- Update existing records to have default values
 UPDATE borrowings SET status = 'pending' WHERE status IS NULL;

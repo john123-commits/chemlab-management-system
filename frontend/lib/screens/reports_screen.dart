@@ -15,6 +15,9 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen> {
   Map<String, dynamic>? _reportData;
   bool _isLoading = true;
+  bool _isRefreshing = false;
+  String? _errorMessage;
+  List<_ChartData> _chartData = [];
 
   @override
   void initState() {
@@ -22,22 +25,54 @@ class _ReportsScreenState extends State<ReportsScreen> {
     _loadReport();
   }
 
-  Future<void> _loadReport() async {
+  Future<void> _loadReport({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+
     try {
       final report = await ApiService.getMonthlyReport();
+      _prepareChartData(report);
       setState(() {
         _reportData = report;
         _isLoading = false;
+        _isRefreshing = false;
+        _errorMessage = null;
       });
     } catch (error) {
       setState(() {
         _isLoading = false;
+        _isRefreshing = false;
+        _errorMessage = error.toString();
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to load report')),
+        SnackBar(content: Text('Failed to load report: ${error.toString()}')),
       );
     }
+  }
+
+  void _prepareChartData(Map<String, dynamic> report) {
+    if (report.isEmpty) return;
+
+    final totalChemicals = report['summary']['totalChemicals'] ?? 0;
+    final expiringChemicals = report['expiringChemicals']?.length ?? 0;
+    final lowStockChemicals = report['lowStockChemicals']?.length ?? 0;
+
+    _chartData = [
+      _ChartData(
+          'Normal', totalChemicals - expiringChemicals - lowStockChemicals),
+      _ChartData('Expiring Soon', expiringChemicals),
+      _ChartData('Low Stock', lowStockChemicals),
+    ];
+  }
+
+  Future<void> _refreshReport() async {
+    setState(() => _isRefreshing = true);
+    await _loadReport(showLoading: false);
   }
 
   Future<void> _exportReport(String format) async {
@@ -87,239 +122,381 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: _loadReport,
+      onRefresh: _refreshReport,
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : _reportData == null
-                ? const Center(child: Text('No report data available'))
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Summary Section
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+            : _errorMessage != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Failed to load report',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _loadReport,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  )
+                : _reportData == null
+                    ? const Center(child: Text('No report data available'))
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Summary Section
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Monthly Report Summary',
+                                    style:
+                                        Theme.of(context).textTheme.titleLarge,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      _buildReportStat(
+                                        'Chemicals',
+                                        _reportData!['summary']
+                                                ['totalChemicals']
+                                            .toString(),
+                                        Icons.science,
+                                        Colors.blue,
+                                      ),
+                                      _buildReportStat(
+                                        'Equipment',
+                                        _reportData!['summary']
+                                                ['totalEquipment']
+                                            .toString(),
+                                        Icons.build,
+                                        Colors.green,
+                                      ),
+                                      _buildReportStat(
+                                        'Active',
+                                        _reportData!['summary']
+                                                ['activeBorrowings']
+                                            .toString(),
+                                        Icons.check_circle,
+                                        Colors.orange,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      _buildReportStat(
+                                        'Pending',
+                                        _reportData!['summary']
+                                                ['pendingBorrowings']
+                                            .toString(),
+                                        Icons.pending,
+                                        Colors.purple,
+                                      ),
+                                      _buildReportStat(
+                                        'Overdue',
+                                        _reportData!['summary']
+                                                ['overdueBorrowings']
+                                            .toString(),
+                                        Icons.warning,
+                                        Colors.red,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Charts Section with Performance Optimization
+                          if (_chartData.isNotEmpty) ...[
+                            Card(
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Inventory Status',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      height: 300,
+                                      child: _isRefreshing
+                                          ? const Center(
+                                              child:
+                                                  CircularProgressIndicator())
+                                          : SfCircularChart(
+                                              title: const ChartTitle(
+                                                  text:
+                                                      'Chemical Inventory Overview'),
+                                              legend: const Legend(
+                                                isVisible: true,
+                                                position: LegendPosition.bottom,
+                                                overflowMode:
+                                                    LegendItemOverflowMode.wrap,
+                                              ),
+                                              tooltipBehavior:
+                                                  TooltipBehavior(enable: true),
+                                              series: <CircularSeries<
+                                                  _ChartData, String>>[
+                                                PieSeries<_ChartData, String>(
+                                                  dataSource: _chartData,
+                                                  xValueMapper:
+                                                      (_ChartData data, _) =>
+                                                          data.x,
+                                                  yValueMapper:
+                                                      (_ChartData data, _) =>
+                                                          data.y,
+                                                  dataLabelMapper: (_ChartData
+                                                              data,
+                                                          _) =>
+                                                      '${data.x}: ${data.y}',
+                                                  dataLabelSettings:
+                                                      const DataLabelSettings(
+                                                    isVisible: true,
+                                                    labelPosition:
+                                                        ChartDataLabelPosition
+                                                            .outside,
+                                                    useSeriesColor: true,
+                                                  ),
+                                                  pointColorMapper:
+                                                      (_ChartData data, _) {
+                                                    switch (data.x) {
+                                                      case 'Normal':
+                                                        return Colors.green;
+                                                      case 'Expiring Soon':
+                                                        return Colors.orange;
+                                                      case 'Low Stock':
+                                                        return Colors.red;
+                                                      default:
+                                                        return Colors.blue;
+                                                    }
+                                                  },
+                                                  explode: true,
+                                                  explodeIndex: 0,
+                                                )
+                                              ],
+                                            ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Additional Charts - Equipment Status
+                            Card(
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Equipment Status Overview',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      height: 250,
+                                      child: SfCartesianChart(
+                                        primaryXAxis: CategoryAxis(),
+                                        primaryYAxis: NumericAxis(),
+                                        title: const ChartTitle(
+                                            text: 'Equipment by Condition'),
+                                        legend: const Legend(isVisible: true),
+                                        tooltipBehavior:
+                                            TooltipBehavior(enable: true),
+                                        series: <CartesianSeries>[
+                                          ColumnSeries<Map<String, dynamic>,
+                                              String>(
+                                            dataSource: [
+                                              {
+                                                'condition': 'Excellent',
+                                                'count': 2
+                                              },
+                                              {'condition': 'Good', 'count': 2},
+                                              {'condition': 'Fair', 'count': 1},
+                                            ],
+                                            xValueMapper:
+                                                (Map<String, dynamic> data,
+                                                        _) =>
+                                                    data['condition'],
+                                            yValueMapper:
+                                                (Map<String, dynamic> data,
+                                                        _) =>
+                                                    data['count'],
+                                            name: 'Equipment Count',
+                                            color: Colors.blue,
+                                            dataLabelSettings:
+                                                const DataLabelSettings(
+                                                    isVisible: true),
+                                          )
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+
+                          // Expiring Chemicals
+                          if (_reportData!['expiringChemicals'].isNotEmpty) ...[
+                            Text(
+                              'Expiring Chemicals',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Card(
+                              child: Column(
+                                children: _reportData!['expiringChemicals']
+                                    .map<Widget>((chemical) {
+                                  return ListTile(
+                                    title: Text(chemical['name']),
+                                    subtitle: Text(
+                                      'Expires: ${DateFormat('MMM dd, yyyy').format(DateTime.parse(chemical['expiry_date']))}',
+                                    ),
+                                    trailing: const Icon(
+                                      Icons.warning,
+                                      color: Colors.orange,
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Low Stock Chemicals
+                          if (_reportData!['lowStockChemicals'].isNotEmpty) ...[
+                            Text(
+                              'Low Stock Chemicals',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Card(
+                              child: Column(
+                                children: _reportData!['lowStockChemicals']
+                                    .map<Widget>((chemical) {
+                                  return ListTile(
+                                    title: Text(chemical['name']),
+                                    subtitle: Text(
+                                      'Quantity: ${chemical['quantity']} ${chemical['unit']}',
+                                    ),
+                                    trailing: const Icon(
+                                      Icons.low_priority,
+                                      color: Colors.red,
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Due Equipment
+                          if (_reportData!['dueEquipment'].isNotEmpty) ...[
+                            Text(
+                              'Equipment Due for Maintenance',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Card(
+                              child: Column(
+                                children: _reportData!['dueEquipment']
+                                    .map<Widget>((eq) {
+                                  return ListTile(
+                                    title: Text(eq['name']),
+                                    subtitle: Text(
+                                      'Last Maintenance: ${DateFormat('MMM dd, yyyy').format(DateTime.parse(eq['last_maintenance_date']))}',
+                                    ),
+                                    trailing: const Icon(
+                                      Icons.build,
+                                      color: Colors.orange,
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Overdue Borrowings
+                          if (_reportData!['overdueBorrowings'].isNotEmpty) ...[
+                            Text(
+                              'Overdue Borrowings',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Card(
+                              child: Column(
+                                children: _reportData!['overdueBorrowings']
+                                    .map<Widget>((borrowing) {
+                                  return ListTile(
+                                    title: Text(borrowing['borrower_name']),
+                                    subtitle: Text(
+                                      'Return Date: ${DateFormat('MMM dd, yyyy').format(DateTime.parse(borrowing['return_date']))}',
+                                    ),
+                                    trailing: const Icon(
+                                      Icons.warning,
+                                      color: Colors.red,
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                          ],
+
+                          // Export Buttons
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
-                              Text(
-                                'Monthly Report Summary',
-                                style: Theme.of(context).textTheme.titleLarge,
+                              ElevatedButton.icon(
+                                onPressed: () => _exportReport('PDF'),
+                                icon: const Icon(Icons.picture_as_pdf),
+                                label: const Text('Export PDF'),
                               ),
-                              const SizedBox(height: 16),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  _buildReportStat(
-                                    'Chemicals',
-                                    _reportData!['summary']['totalChemicals']
-                                        .toString(),
-                                    Icons.science,
-                                    Colors.blue,
-                                  ),
-                                  _buildReportStat(
-                                    'Equipment',
-                                    _reportData!['summary']['totalEquipment']
-                                        .toString(),
-                                    Icons.build,
-                                    Colors.green,
-                                  ),
-                                  _buildReportStat(
-                                    'Active',
-                                    _reportData!['summary']['activeBorrowings']
-                                        .toString(),
-                                    Icons.check_circle,
-                                    Colors.orange,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  _buildReportStat(
-                                    'Pending',
-                                    _reportData!['summary']['pendingBorrowings']
-                                        .toString(),
-                                    Icons.pending,
-                                    Colors.purple,
-                                  ),
-                                  _buildReportStat(
-                                    'Overdue',
-                                    _reportData!['summary']['overdueBorrowings']
-                                        .toString(),
-                                    Icons.warning,
-                                    Colors.red,
-                                  ),
-                                ],
+                              ElevatedButton.icon(
+                                onPressed: () => _exportReport('CSV'),
+                                icon: const Icon(Icons.table_chart),
+                                label: const Text('Export CSV'),
                               ),
                             ],
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Charts
-                      SizedBox(
-                        height: 300,
-                        child: SfCircularChart(
-                          title: const ChartTitle(text: 'Inventory Status'),
-                          legend: const Legend(isVisible: true),
-                          series: <CircularSeries>[
-                            PieSeries<_ChartData, String>(
-                              dataSource: [
-                                _ChartData(
-                                    'Normal',
-                                    _reportData!['summary']['totalChemicals'] -
-                                        _reportData!['expiringChemicals']
-                                            .length -
-                                        _reportData!['lowStockChemicals']
-                                            .length),
-                                _ChartData('Expiring Soon',
-                                    _reportData!['expiringChemicals'].length),
-                                _ChartData('Low Stock',
-                                    _reportData!['lowStockChemicals'].length),
-                              ],
-                              xValueMapper: (_ChartData data, _) => data.x,
-                              yValueMapper: (_ChartData data, _) => data.y,
-                              dataLabelSettings:
-                                  const DataLabelSettings(isVisible: true),
-                            )
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Expiring Chemicals
-                      if (_reportData!['expiringChemicals'].isNotEmpty) ...[
-                        Text(
-                          'Expiring Chemicals',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Card(
-                          child: Column(
-                            children: _reportData!['expiringChemicals']
-                                .map<Widget>((chemical) {
-                              return ListTile(
-                                title: Text(chemical['name']),
-                                subtitle: Text(
-                                  'Expires: ${DateFormat('MMM dd, yyyy').format(DateTime.parse(chemical['expiry_date']))}',
-                                ),
-                                trailing: const Icon(
-                                  Icons.warning,
-                                  color: Colors.orange,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Low Stock Chemicals
-                      if (_reportData!['lowStockChemicals'].isNotEmpty) ...[
-                        Text(
-                          'Low Stock Chemicals',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Card(
-                          child: Column(
-                            children: _reportData!['lowStockChemicals']
-                                .map<Widget>((chemical) {
-                              return ListTile(
-                                title: Text(chemical['name']),
-                                subtitle: Text(
-                                  'Quantity: ${chemical['quantity']} ${chemical['unit']}',
-                                ),
-                                trailing: const Icon(
-                                  Icons.low_priority,
-                                  color: Colors.red,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Due Equipment
-                      if (_reportData!['dueEquipment'].isNotEmpty) ...[
-                        Text(
-                          'Equipment Due for Maintenance',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Card(
-                          child: Column(
-                            children:
-                                _reportData!['dueEquipment'].map<Widget>((eq) {
-                              return ListTile(
-                                title: Text(eq['name']),
-                                subtitle: Text(
-                                  'Last Maintenance: ${DateFormat('MMM dd, yyyy').format(DateTime.parse(eq['last_maintenance_date']))}',
-                                ),
-                                trailing: const Icon(
-                                  Icons.build,
-                                  color: Colors.orange,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Overdue Borrowings
-                      if (_reportData!['overdueBorrowings'].isNotEmpty) ...[
-                        Text(
-                          'Overdue Borrowings',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Card(
-                          child: Column(
-                            children: _reportData!['overdueBorrowings']
-                                .map<Widget>((borrowing) {
-                              return ListTile(
-                                title: Text(borrowing['borrower_name']),
-                                subtitle: Text(
-                                  'Return Date: ${DateFormat('MMM dd, yyyy').format(DateTime.parse(borrowing['return_date']))}',
-                                ),
-                                trailing: const Icon(
-                                  Icons.warning,
-                                  color: Colors.red,
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-
-                      // Export Buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: () => _exportReport('PDF'),
-                            icon: const Icon(Icons.picture_as_pdf),
-                            label: const Text('Export PDF'),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: () => _exportReport('CSV'),
-                            icon: const Icon(Icons.table_chart),
-                            label: const Text('Export CSV'),
-                          ),
                         ],
                       ),
-                    ],
-                  ),
       ),
     );
   }

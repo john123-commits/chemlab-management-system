@@ -7,6 +7,7 @@ import 'package:chemlab_frontend/screens/chemicals_screen.dart';
 import 'package:chemlab_frontend/screens/equipment_screen.dart';
 import 'package:chemlab_frontend/screens/borrowings_screen.dart';
 import 'package:chemlab_frontend/screens/borrowing_form_screen.dart';
+import 'package:chemlab_frontend/screens/chatbot_screen.dart';
 import 'package:logger/logger.dart';
 
 var logger = Logger();
@@ -143,118 +144,442 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return RefreshIndicator(
       onRefresh: _refreshDashboardData,
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _errorMessage != null
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.error, size: 64, color: Colors.red[300]),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Failed to load dashboard data',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.grey[600],
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _errorMessage != null
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error,
+                                  size: 64, color: Colors.red[300]),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Failed to load dashboard data',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _errorMessage!,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[500],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _loadDashboardData,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Welcome Header with User Info
+                            Text(
+                              isTechnician
+                                  ? 'Technician Dashboard'
+                                  : 'Admin Dashboard',
+                              style: Theme.of(context).textTheme.headlineSmall,
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            _errorMessage!,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[500],
+                            const SizedBox(height: 8),
+
+                            // ✅ Enhanced User Information Display
+                            _buildUserInfoCard(),
+                            const SizedBox(height: 24),
+
+                            // Pending Requests Alert
+                            if (_pendingRequestsCount > 0) ...[
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 24),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border:
+                                      Border.all(color: Colors.orange[300]!),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.warning,
+                                      color: Colors.orange,
+                                      size: 32,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '$_pendingRequestsCount Pending Request${_pendingRequestsCount == 1 ? '' : 's'}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                              color: Colors.orange,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          const Text(
+                                            'Review pending borrowing requests',
+                                            style: TextStyle(
+                                              color: Colors.orange,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const BorrowingsScreen(),
+                                          ),
+                                        );
+                                      },
+                                      child: const Text('Review'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            // Quick Actions Card
+                            Card(
+                              elevation: 4,
+                              child: Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Column(
+                                  children: [
+                                    const Icon(
+                                      Icons.build_outlined,
+                                      size: 64,
+                                      color: Colors.blue,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      isTechnician
+                                          ? 'Welcome Technician!'
+                                          : 'Welcome Admin!',
+                                      style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      'Quick Actions:',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                        '• Manage chemical and equipment inventory'),
+                                    const Text(
+                                        '• Review and approve borrowing requests'),
+                                    const Text('• Monitor system alerts'),
+                                    const SizedBox(height: 24),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  const ChemicalsScreen(),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.science),
+                                        label: const Text('Manage Chemicals'),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  const EquipmentScreen(),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.build),
+                                        label: const Text('Manage Equipment'),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  const BorrowingsScreen(),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.assignment),
+                                        label: const Text('Review Requests'),
+                                      ),
+                                    ),
+                                    // ✅ ChatBot Quick Action for Staff
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  const ChatBotScreen(),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.chat_bubble),
+                                        label: const Text('Chat with ChemBot'),
+                                      ),
+                                    ),
+                                    // ✅ Admin-only user management
+                                    if (isAdmin) ...[
+                                      const SizedBox(height: 12),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: ElevatedButton.icon(
+                                          onPressed: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    const UserManagementScreen(),
+                                              ),
+                                            );
+                                          },
+                                          icon: const Icon(Icons.people),
+                                          label: const Text('Manage Users'),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _loadDashboardData,
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    )
+                            const SizedBox(height: 24),
+
+                            // Summary Cards (for admin with full reports)
+                            if (isAdmin && _reportData != null) ...[
+                              Text(
+                                'Summary',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 16),
+                              // First Row
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: _buildSummaryCard(
+                                      'Chemicals',
+                                      _reportData!['summary']['totalChemicals']
+                                          .toString(),
+                                      Icons.science,
+                                      Colors.blue,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Flexible(
+                                    child: _buildSummaryCard(
+                                      'Equipment',
+                                      _reportData!['summary']['totalEquipment']
+                                          .toString(),
+                                      Icons.build,
+                                      Colors.green,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              // Second Row
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: _buildSummaryCard(
+                                      'Active',
+                                      _reportData!['summary']
+                                              ['activeBorrowings']
+                                          .toString(),
+                                      Icons.check_circle,
+                                      Colors.orange,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Flexible(
+                                    child: _buildSummaryCard(
+                                      'Pending',
+                                      _reportData!['summary']
+                                              ['pendingBorrowings']
+                                          .toString(),
+                                      Icons.pending,
+                                      Colors.purple,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              // Full Width Card
+                              _buildSummaryCard(
+                                'Overdue',
+                                _reportData!['summary']['overdueBorrowings']
+                                    .toString(),
+                                Icons.warning,
+                                Colors.red,
+                                fullWidth: true,
+                              ),
+                              const SizedBox(height: 32),
+                            ],
+
+                            // Alerts Section
+                            if (_alerts != null && _alerts!.isNotEmpty) ...[
+                              Text(
+                                'System Alerts',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 16),
+                              Container(
+                                constraints: const BoxConstraints(
+                                  maxHeight: 300,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.red[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.red[200]!),
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: _alerts!.map((alert) {
+                                      return ListTile(
+                                        leading: Icon(
+                                          alert['type'] == 'chemical_expiry' ||
+                                                  alert['type'] ==
+                                                      'overdue_borrowing'
+                                              ? Icons.warning
+                                              : Icons.info,
+                                          color: Colors.red,
+                                        ),
+                                        title: Text(alert['message']),
+                                        subtitle: Text(
+                                          alert['type']
+                                              .toString()
+                                              .replaceAll('_', ' ')
+                                              .toUpperCase(),
+                                          style: TextStyle(
+                                              color: Colors.grey[600]),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+                            ],
+
+                            // Charts Section (only for admin)
+                            if (isAdmin && _reportData != null) ...[
+                              Text(
+                                'Inventory Overview',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              const SizedBox(height: 16),
+                              Container(
+                                height: 300,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey[300]!),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'Charts functionality to be implemented',
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+            ),
+          ),
+          // ✅ Floating Chat Button for Staff
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const ChatBotScreen()),
+                );
+              },
+              child: const Icon(Icons.chat_bubble),
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBorrowerDashboard() {
+    return RefreshIndicator(
+      onRefresh: _refreshDashboardData,
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Welcome Header with User Info
                         Text(
-                          isTechnician
-                              ? 'Technician Dashboard'
-                              : 'Admin Dashboard',
+                          'Borrower Dashboard',
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
                         const SizedBox(height: 8),
 
-                        // ✅ Enhanced User Information Display
+                        // ✅ Enhanced User Information Display for Borrowers
                         _buildUserInfoCard(),
                         const SizedBox(height: 24),
 
-                        // Pending Requests Alert
-                        if (_pendingRequestsCount > 0) ...[
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 24),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.orange[100],
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.orange[300]!),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.warning,
-                                  color: Colors.orange,
-                                  size: 32,
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '$_pendingRequestsCount Pending Request${_pendingRequestsCount == 1 ? '' : 's'}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                          color: Colors.orange,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      const Text(
-                                        'Review pending borrowing requests',
-                                        style: TextStyle(
-                                          color: Colors.orange,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const BorrowingsScreen(),
-                                      ),
-                                    );
-                                  },
-                                  child: const Text('Review'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-
-                        // Quick Actions Card
                         Card(
                           elevation: 4,
                           child: Padding(
@@ -262,23 +587,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Column(
                               children: [
                                 const Icon(
-                                  Icons.build_outlined,
+                                  Icons.science_outlined,
                                   size: 64,
                                   color: Colors.blue,
                                 ),
                                 const SizedBox(height: 16),
-                                Text(
-                                  isTechnician
-                                      ? 'Welcome Technician!'
-                                      : 'Welcome Admin!',
-                                  style: const TextStyle(
+                                const Text(
+                                  'Welcome Borrower!',
+                                  style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 const SizedBox(height: 16),
                                 const Text(
-                                  'Quick Actions:',
+                                  'You can:',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
@@ -286,11 +609,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 const Text(
-                                    '• Manage chemical and equipment inventory'),
-                                const Text(
-                                    '• Review and approve borrowing requests'),
-                                const Text('• Monitor system alerts'),
-                                // ✅ REMOVED: Lecture schedule action text for technicians
+                                    '• View available chemicals and equipment'),
+                                const Text('• Submit borrowing requests'),
+                                const Text('• View your request status'),
                                 const SizedBox(height: 24),
                                 SizedBox(
                                   width: double.infinity,
@@ -305,7 +626,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       );
                                     },
                                     icon: const Icon(Icons.science),
-                                    label: const Text('Manage Chemicals'),
+                                    label: const Text('View Chemicals'),
                                   ),
                                 ),
                                 const SizedBox(height: 12),
@@ -322,7 +643,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       );
                                     },
                                     icon: const Icon(Icons.build),
-                                    label: const Text('Manage Equipment'),
+                                    label: const Text('View Equipment'),
                                   ),
                                 ),
                                 const SizedBox(height: 12),
@@ -339,343 +660,104 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       );
                                     },
                                     icon: const Icon(Icons.assignment),
-                                    label: const Text('Review Requests'),
+                                    label: const Text('My Requests'),
                                   ),
                                 ),
-                                // ✅ REMOVED: Lecture schedule button for technicians
-                                // ✅ Admin-only user management
-                                if (isAdmin) ...[
-                                  const SizedBox(height: 12),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton.icon(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                const UserManagementScreen(),
-                                          ),
-                                        );
-                                      },
-                                      icon: const Icon(Icons.people),
-                                      label: const Text('Manage Users'),
-                                    ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const BorrowingFormScreen(),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Request Borrowing'),
                                   ),
-                                ],
+                                ),
+                                // ✅ ChatBot Quick Action for Borrowers
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const ChatBotScreen(),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.chat_bubble),
+                                    label: const Text('Chat with ChemBot'),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                         ),
                         const SizedBox(height: 24),
-
-                        // Summary Cards (for admin with full reports)
-                        if (isAdmin && _reportData != null) ...[
-                          Text(
-                            'Summary',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 16),
-                          // First Row
-                          Row(
-                            children: [
-                              Flexible(
-                                child: _buildSummaryCard(
-                                  'Chemicals',
-                                  _reportData!['summary']['totalChemicals']
-                                      .toString(),
-                                  Icons.science,
-                                  Colors.blue,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Flexible(
-                                child: _buildSummaryCard(
-                                  'Equipment',
-                                  _reportData!['summary']['totalEquipment']
-                                      .toString(),
-                                  Icons.build,
-                                  Colors.green,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          // Second Row
-                          Row(
-                            children: [
-                              Flexible(
-                                child: _buildSummaryCard(
-                                  'Active',
-                                  _reportData!['summary']['activeBorrowings']
-                                      .toString(),
-                                  Icons.check_circle,
-                                  Colors.orange,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Flexible(
-                                child: _buildSummaryCard(
-                                  'Pending',
-                                  _reportData!['summary']['pendingBorrowings']
-                                      .toString(),
-                                  Icons.pending,
-                                  Colors.purple,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          // Full Width Card
-                          _buildSummaryCard(
-                            'Overdue',
-                            _reportData!['summary']['overdueBorrowings']
-                                .toString(),
-                            Icons.warning,
-                            Colors.red,
-                            fullWidth: true,
-                          ),
-                          const SizedBox(height: 32),
-                        ],
-
-                        // Alerts Section
+                        // Borrower alerts (if any)
                         if (_alerts != null && _alerts!.isNotEmpty) ...[
                           Text(
-                            'System Alerts',
+                            'Your Alerts',
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 16),
                           Container(
-                            constraints: const BoxConstraints(
-                              maxHeight: 300,
-                            ),
                             decoration: BoxDecoration(
-                              color: Colors.red[50],
+                              color: Colors.orange[50],
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.red[200]!),
+                              border: Border.all(color: Colors.orange[200]!),
                             ),
-                            child: SingleChildScrollView(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: _alerts!.map((alert) {
-                                  return ListTile(
-                                    leading: Icon(
-                                      alert['type'] == 'chemical_expiry' ||
-                                              alert['type'] ==
-                                                  'overdue_borrowing'
-                                          ? Icons.warning
-                                          : Icons.info,
-                                      color: Colors.red,
-                                    ),
-                                    title: Text(alert['message']),
-                                    subtitle: Text(
-                                      alert['type']
-                                          .toString()
-                                          .replaceAll('_', ' ')
-                                          .toUpperCase(),
-                                      style: TextStyle(color: Colors.grey[600]),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                        ],
-
-                        // Charts Section (only for admin)
-                        if (isAdmin && _reportData != null) ...[
-                          Text(
-                            'Inventory Overview',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 16),
-                          Container(
-                            height: 300,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey[300]!),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Charts functionality to be implemented',
-                                style: TextStyle(
-                                  color: Colors.grey[500],
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
+                            child: Column(
+                              children: _alerts!.map((alert) {
+                                return ListTile(
+                                  leading: const Icon(
+                                    Icons.info,
+                                    color: Colors.orange,
+                                  ),
+                                  title: Text(alert['message']),
+                                  subtitle: Text(
+                                    alert['type']
+                                        .toString()
+                                        .replaceAll('_', ' ')
+                                        .toUpperCase(),
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                );
+                              }).toList(),
                             ),
                           ),
                         ],
                       ],
                     ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBorrowerDashboard() {
-    return RefreshIndicator(
-      onRefresh: _refreshDashboardData,
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Borrower Dashboard',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 8),
-
-                    // ✅ Enhanced User Information Display for Borrowers
-                    _buildUserInfoCard(),
-                    const SizedBox(height: 24),
-
-                    Card(
-                      elevation: 4,
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          children: [
-                            const Icon(
-                              Icons.science_outlined,
-                              size: 64,
-                              color: Colors.blue,
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Welcome Borrower!',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'You can:',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                                '• View available chemicals and equipment'),
-                            const Text('• Submit borrowing requests'),
-                            const Text('• View your request status'),
-                            const SizedBox(height: 24),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const ChemicalsScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.science),
-                                label: const Text('View Chemicals'),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const EquipmentScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.build),
-                                label: const Text('View Equipment'),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const BorrowingsScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.assignment),
-                                label: const Text('My Requests'),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const BorrowingFormScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.add),
-                                label: const Text('Request Borrowing'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Borrower alerts (if any)
-                    if (_alerts != null && _alerts!.isNotEmpty) ...[
-                      Text(
-                        'Your Alerts',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.orange[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange[200]!),
-                        ),
-                        child: Column(
-                          children: _alerts!.map((alert) {
-                            return ListTile(
-                              leading: const Icon(
-                                Icons.info,
-                                color: Colors.orange,
-                              ),
-                              title: Text(alert['message']),
-                              subtitle: Text(
-                                alert['type']
-                                    .toString()
-                                    .replaceAll('_', ' ')
-                                    .toUpperCase(),
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-        ),
+            ),
+          ),
+          // ✅ Floating Chat Button for Borrowers
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const ChatBotScreen()),
+                );
+              },
+              child: const Icon(Icons.chat_bubble),
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }

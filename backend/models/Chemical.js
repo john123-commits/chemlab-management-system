@@ -2,11 +2,16 @@ const db = require('../config/db');
 
 class Chemical {
   static async create(chemicalData) {
-    const { name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet } = chemicalData;
-    
+    const {
+      name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet,
+      c_number, molecular_formula, molecular_weight, physical_state, color, density,
+      melting_point, boiling_point, solubility, storage_conditions, hazard_class,
+      safety_precautions, safety_info, msds_link
+    } = chemicalData;
+
     console.log('Creating chemical with raw data:', { name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet });
     console.log('Quantity type:', typeof quantity, 'Value:', quantity);
-    
+
     // Ensure quantity is properly converted to number
     let numericQuantity;
     if (typeof quantity === 'string') {
@@ -16,20 +21,26 @@ class Chemical {
     } else {
       numericQuantity = 0;
     }
-    
+
     console.log('Converted quantity:', numericQuantity, 'Type:', typeof numericQuantity);
-    
+
     // Validate the conversion
     if (isNaN(numericQuantity)) {
       throw new Error('Invalid quantity value: must be a valid number');
     }
-    
+
     const result = await db.query(
-      `INSERT INTO chemicals (name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [name, category, numericQuantity, unit, storage_location, expiry_date, safety_data_sheet]
+      `INSERT INTO chemicals (name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet,
+        c_number, molecular_formula, molecular_weight, physical_state, color, density,
+        melting_point, boiling_point, solubility, storage_conditions, hazard_class,
+        safety_precautions, safety_info, msds_link)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING *`,
+      [name, category, numericQuantity, unit, storage_location, expiry_date, safety_data_sheet,
+       c_number, molecular_formula, molecular_weight, physical_state, color, density,
+       melting_point, boiling_point, solubility, storage_conditions, hazard_class,
+       safety_precautions, safety_info, msds_link]
     );
-    
+
     console.log('Chemical created successfully:', result.rows[0]);
     return result.rows[0];
   }
@@ -63,8 +74,13 @@ class Chemical {
   }
 
   static async update(id, chemicalData) {
-    const { name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet } = chemicalData;
-    
+    const {
+      name, category, quantity, unit, storage_location, expiry_date, safety_data_sheet,
+      c_number, molecular_formula, molecular_weight, physical_state, color, density,
+      melting_point, boiling_point, solubility, storage_conditions, hazard_class,
+      safety_precautions, safety_info, msds_link
+    } = chemicalData;
+
     // Ensure quantity is properly converted to number
     let numericQuantity;
     if (typeof quantity === 'string') {
@@ -74,19 +90,25 @@ class Chemical {
     } else {
       numericQuantity = 0;
     }
-    
+
     // Validate the conversion
     if (isNaN(numericQuantity)) {
       throw new Error('Invalid quantity value: must be a valid number');
     }
-    
+
     const result = await db.query(
-      `UPDATE chemicals SET name = $1, category = $2, quantity = $3, unit = $4, 
-       storage_location = $5, expiry_date = $6, safety_data_sheet = $7 
-       WHERE id = $8 RETURNING *`,
-      [name, category, numericQuantity, unit, storage_location, expiry_date, safety_data_sheet, id]
+      `UPDATE chemicals SET name = $1, category = $2, quantity = $3, unit = $4,
+        storage_location = $5, expiry_date = $6, safety_data_sheet = $7,
+        c_number = $8, molecular_formula = $9, molecular_weight = $10, physical_state = $11,
+        color = $12, density = $13, melting_point = $14, boiling_point = $15, solubility = $16,
+        storage_conditions = $17, hazard_class = $18, safety_precautions = $19, safety_info = $20, msds_link = $21
+        WHERE id = $22 RETURNING *`,
+      [name, category, numericQuantity, unit, storage_location, expiry_date, safety_data_sheet,
+       c_number, molecular_formula, molecular_weight, physical_state, color, density,
+       melting_point, boiling_point, solubility, storage_conditions, hazard_class,
+       safety_precautions, safety_info, msds_link, id]
     );
-    
+
     return result.rows[0];
   }
 

@@ -9,6 +9,7 @@ import 'package:chemlab_frontend/screens/borrowings_screen.dart';
 import 'package:chemlab_frontend/screens/reports_screen.dart';
 import 'package:chemlab_frontend/screens/users_screen.dart';
 import 'package:chemlab_frontend/screens/lecture_schedules_screen.dart';
+import 'package:chemlab_frontend/screens/live_chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -63,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
         const BorrowingsScreen(),
         const LectureSchedulesScreen(),
         const ReportsScreen(),
+        const LiveChatScreen(),
       ];
 
       _titles = [
@@ -72,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'Borrowings',
         'Lecture Schedules',
         'Reports',
+        'Live Chat',
       ];
 
       _navItems = [
@@ -99,6 +102,10 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: Icon(Icons.bar_chart),
           label: 'Reports',
         ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.chat),
+          label: 'Live Chat',
+        ),
       ];
     } else {
       // Admin screens - All features
@@ -110,6 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
         const LectureSchedulesScreen(),
         const ReportsScreen(),
         const UsersScreen(), // Admin only
+        const LiveChatScreen(),
       ];
 
       _titles = [
@@ -120,6 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'Lecture Schedules',
         'Reports',
         'Users',
+        'Live Chat',
       ];
 
       _navItems = [
@@ -150,6 +159,10 @@ class _HomeScreenState extends State<HomeScreen> {
         const BottomNavigationBarItem(
           icon: Icon(Icons.people),
           label: 'Users',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.chat),
+          label: 'Live Chat',
         ),
       ];
     }

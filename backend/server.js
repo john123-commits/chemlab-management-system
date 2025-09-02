@@ -26,6 +26,8 @@ app.use('/api/borrowings', require('./routes/borrowings'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/lecture-schedules', require('./routes/lectureSchedules'));
+// ✅ Add the chatbot route
+app.use('/api/chat', require('./routes/chatbot'));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -47,4 +49,3 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-

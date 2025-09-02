@@ -786,7 +786,7 @@ class ApiService {
     }
   }
 
-// Add this method to get active borrowings
+  // Add this method to get active borrowings
   static Future<List<Borrowing>> getActiveBorrowings() async {
     final token = await getAuthToken();
     final response = await http.get(
@@ -799,6 +799,135 @@ class ApiService {
       return data.map((json) => Borrowing.fromJson(json)).toList();
     } else {
       throw Exception('Failed to load active borrowings');
+    }
+  }
+
+  // ✅ CHATBOT METHODS - Fixed and properly integrated
+  static Future<Map<String, dynamic>> sendChatMessage(
+      String message, int userId, String userRole) async {
+    final token = await getAuthToken();
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/chat/message'),
+      headers: getHeaders(token),
+      body: jsonEncode({
+        'message': message,
+        'userId': userId,
+        'userRole': userRole,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to send chat message');
+    }
+  }
+
+  static Future<List<dynamic>> getChatQuickActions(String userRole) async {
+    final token = await getAuthToken();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/chat/quick-actions/$userRole'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['actions'];
+    } else {
+      throw Exception('Failed to load quick actions');
+    }
+  }
+
+  // ✅ LIVE CHAT METHODS - For admin-to-user communication
+  static Future<Map<String, dynamic>> startLiveChat(int userId,
+      {String? title}) async {
+    final token = await getAuthToken();
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/chat/live-chat/start'),
+      headers: getHeaders(token),
+      body: jsonEncode({
+        'userId': userId,
+        'title': title ?? 'Live Support',
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to start live chat: ${response.body}');
+    }
+  }
+
+  static Future<Map<String, dynamic>> sendLiveChatMessage(
+      int conversationId, String message) async {
+    final token = await getAuthToken();
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/chat/live-chat/message'),
+      headers: getHeaders(token),
+      body: jsonEncode({
+        'conversationId': conversationId,
+        'message': message,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to send live chat message: ${response.body}');
+    }
+  }
+
+  static Future<List<dynamic>> getLiveChatConversations() async {
+    final token = await getAuthToken();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/chat/live-chat/conversations'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['conversations'];
+    } else {
+      throw Exception(
+          'Failed to load live chat conversations: ${response.body}');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getLiveChatMessages(
+      int conversationId) async {
+    final token = await getAuthToken();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/chat/live-chat/messages/$conversationId'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load live chat messages: ${response.body}');
+    }
+  }
+
+  static Future<Map<String, dynamic>> closeLiveChatConversation(
+      int conversationId) async {
+    final token = await getAuthToken();
+
+    final response = await http.put(
+      Uri.parse('$baseUrl/chat/live-chat/conversations/$conversationId/close'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception(
+          'Failed to close live chat conversation: ${response.body}');
     }
   }
 }
