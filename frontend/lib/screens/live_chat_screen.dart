@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
+import 'package:chemlab_frontend/models/user.dart';
 
 class LiveChatScreen extends StatefulWidget {
   const LiveChatScreen({super.key});
@@ -15,6 +16,8 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
   final TextEditingController _userIdController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
 
+  List<User> _users = [];
+  bool _isLoadingUsers = false;
   List<dynamic> _conversations = [];
   Map<String, dynamic>? _selectedConversation;
   List<dynamic> _messages = [];
@@ -26,6 +29,26 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
   void initState() {
     super.initState();
     _loadConversations();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    if (!mounted) return;
+    setState(() => _isLoadingUsers = true);
+    try {
+      final List<User> users = await ApiService.getUsers();
+      setState(() {
+        _users = users;
+        _isLoadingUsers = false;
+      });
+    } catch (error) {
+      setState(() => _isLoadingUsers = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load users: $error')),
+        );
+      }
+    }
   }
 
   Future<void> _loadConversations() async {
@@ -213,14 +236,47 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 16),
-                    TextField(
-                      controller: _userIdController,
-                      decoration: const InputDecoration(
-                        labelText: 'User ID',
-                        hintText: 'Enter user ID to start chat with',
+                    if (_isLoadingUsers)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else ...[
+                      DropdownButtonFormField<int>(
+                        value: null,
+                        decoration: const InputDecoration(
+                          labelText: 'Select User',
+                          hintText: 'Choose a user to start chat with',
+                          helperText:
+                              'Select from the list of registered users',
+                        ),
+                        items: _users.map<DropdownMenuItem<int>>((User user) {
+                          return DropdownMenuItem<int>(
+                            value: user.id,
+                            child: Text(
+                              '${user.name} (${user.email}) - ID: ${user.id}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _userIdController.text = value.toString();
+                            });
+                          }
+                        },
                       ),
-                      keyboardType: TextInputType.number,
-                    ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Tip: Select a user from the dropdown. The User ID will be automatically filled for the chat.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                        textAlign: TextAlign.start,
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     TextField(
                       controller: _titleController,
@@ -320,6 +376,8 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                                           ),
                                           onTap: () =>
                                               _selectConversation(conversation),
+                                          onLongPress: () =>
+                                              _showDeleteDialog(conversation),
                                         );
                                       },
                                     ),
@@ -402,50 +460,54 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                                             'admin' ||
                                         message['sender_type'] == 'technician';
 
-                                    return Align(
-                                      alignment: isAdmin
-                                          ? Alignment.centerRight
-                                          : Alignment.centerLeft,
-                                      child: Container(
-                                        margin: const EdgeInsets.symmetric(
-                                            vertical: 4),
-                                        padding: const EdgeInsets.all(12),
-                                        constraints: BoxConstraints(
-                                          maxWidth: MediaQuery.of(context)
-                                                  .size
-                                                  .width *
-                                              0.6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isAdmin
-                                              ? Colors.blue[600]
-                                              : Colors.grey[300],
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              message['message_text'],
-                                              style: TextStyle(
-                                                color: isAdmin
-                                                    ? Colors.white
-                                                    : Colors.black87,
+                                    return GestureDetector(
+                                      onLongPress: () =>
+                                          _showMessageDeleteDialog(message),
+                                      child: Align(
+                                        alignment: isAdmin
+                                            ? Alignment.centerRight
+                                            : Alignment.centerLeft,
+                                        child: Container(
+                                          margin: const EdgeInsets.symmetric(
+                                              vertical: 4),
+                                          padding: const EdgeInsets.all(12),
+                                          constraints: BoxConstraints(
+                                            maxWidth: MediaQuery.of(context)
+                                                    .size
+                                                    .width *
+                                                0.6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isAdmin
+                                                ? Colors.blue[600]
+                                                : Colors.grey[300],
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                message['message_text'],
+                                                style: TextStyle(
+                                                  color: isAdmin
+                                                      ? Colors.white
+                                                      : Colors.black87,
+                                                ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '${message['sender_name'] ?? message['sender_type']} • ${_formatTimestamp(message['created_at'])}',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: isAdmin
-                                                    ? Colors.white70
-                                                    : Colors.black54,
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '${message['sender_name'] ?? message['sender_type']} • ${_formatTimestamp(message['created_at'])}',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: isAdmin
+                                                      ? Colors.white70
+                                                      : Colors.black54,
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     );
@@ -494,6 +556,95 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showDeleteDialog(Map<String, dynamic> conversation) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Conversation'),
+          content: Text(
+            'Are you sure you want to delete the conversation "${conversation['title'] ?? 'Live Support'}"? This action cannot be undone.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            TextButton(
+              child: const Text('Delete'),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      try {
+        await ApiService.deleteLiveChatConversation(conversation['id']);
+        await _loadConversations();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Conversation deleted successfully')),
+          );
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete conversation: $error')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _showMessageDeleteDialog(Map<String, dynamic> message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Message'),
+          content: const Text(
+            'Are you sure you want to delete this message? This action cannot be undone.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            TextButton(
+              child: const Text('Delete'),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && _selectedConversation != null) {
+      try {
+        await ApiService.deleteLiveChatMessage(message['id']);
+        // Reload messages for the current conversation
+        final result =
+            await ApiService.getLiveChatMessages(_selectedConversation!['id']);
+        setState(() {
+          _messages = result['messages'];
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Message deleted successfully')),
+          );
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete message: $error')),
+          );
+        }
+      }
+    }
   }
 
   String _formatTimestamp(String timestamp) {

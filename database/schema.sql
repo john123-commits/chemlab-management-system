@@ -152,7 +152,7 @@ CREATE TABLE chat_conversations (
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'closed', 'archived')),
     title VARCHAR(200),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 CREATE TABLE chat_messages (

@@ -930,4 +930,37 @@ class ApiService {
           'Failed to close live chat conversation: ${response.body}');
     }
   }
+
+  static Future<Map<String, dynamic>> deleteLiveChatConversation(
+      int conversationId) async {
+    final token = await getAuthToken();
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/chat/live-chat/conversations/$conversationId'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception(
+          'Failed to delete live chat conversation: ${response.body}');
+    }
+  }
+
+  static Future<Map<String, dynamic>> deleteLiveChatMessage(
+      int messageId) async {
+    final token = await getAuthToken();
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/chat/live-chat/messages/$messageId'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to delete live chat message: ${response.body}');
+    }
+  }
 }

@@ -214,33 +214,80 @@ async function processChatMessage(message, userId, userRole) {
     return contextualResponse;
   }
 
-  // Enhanced default response with contextual suggestions
-  let defaultResponse = "🤖 **ChemBot at your service!**\n\n";
+  // Enhanced default response with contextual suggestions based on actual system state
+  const chemicals = await getChemicals();
+  const equipment = await getEquipment();
+  const schedules = await getLectureSchedules();
+  const borrowings = await getBorrowings();
+  const userBorrowings = borrowings.filter(b => b.borrower_id === userId);
 
-  // Add contextual suggestions based on conversation history
+  let defaultResponse = "🤖 **ChemBot: Your Lab Assistant!**\n\n";
+
+  // Personalized greeting based on context
   if (context.last_topic) {
-    defaultResponse += `💭 **Continuing our conversation about ${context.last_topic}...**\n\n`;
+    defaultResponse += `💭 Picking up from ${context.last_topic}...\n\n`;
   }
 
-  defaultResponse += "I can help you with:\n\n" +
-           "🧪 **Chemicals**\n" +
-           "• 'What are the details of sodium chloride?'\n" +
-           "• 'Show me available chemicals'\n" +
-           "• 'Tell me about hydrochloric acid properties'\n" +
-           "• 'What chemicals are running low?'\n" +
-           "• 'Show me expiring chemicals'\n\n" +
-           "⚙️ **Equipment**\n" +
-           "• 'What are the specifications of microscope?'\n" +
-           "• 'Show me available equipment'\n" +
-           "• 'Details of centrifuge'\n" +
-           "• 'Book the HPLC for tomorrow'\n" +
-           "• 'What equipment needs maintenance?'\n\n" +
-           "📅 **Lab Management**\n" +
-           "• 'What's today's schedule?'\n" +
-           "• 'Check my borrowing status'\n" +
-           "• 'Safety procedures for acids'\n" +
-           "• 'Request purchase of methanol'\n\n" +
-           "💬 What would you like to know?";
+  // Quick system overview
+  defaultResponse += `**Quick Status:**\n`;
+  defaultResponse += `• 🧪 Chemicals: ${chemicals.length} in stock\n`;
+  defaultResponse += `• ⚙️ Equipment: ${equipment.length} available\n`;
+  if (schedules.length > 0) {
+    const today = new Date().toISOString().split('T')[0];
+    const todaySchedules = schedules.filter(s => s.date === today);
+    defaultResponse += `• 📅 Today's labs: ${todaySchedules.length}\n`;
+  }
+  if (userBorrowings.length > 0) {
+    const pending = userBorrowings.filter(b => b.status === 'pending').length;
+    if (pending > 0) {
+      defaultResponse += `• 📋 Your pending requests: ${pending}\n`;
+    }
+  }
+  defaultResponse += `\n**How can I help?**\n\n`;
+
+  // Concise, prioritized suggestions
+  defaultResponse += "🔬 **Chemicals**\n";
+  if (chemicals.length > 0) {
+    const sample = chemicals[0];
+    defaultResponse += `• Search chemicals (${chemicals.length} total)\n`;
+    defaultResponse += `• Details on ${sample.name}\n`;
+  } else {
+    defaultResponse += `• Request restock\n`;
+  }
+  defaultResponse += `\n`;
+
+  defaultResponse += "⚙️ **Equipment**\n";
+  if (equipment.length > 0) {
+    const sample = equipment[0];
+    const available = equipment.filter(e => e.status === 'available').length;
+    defaultResponse += `• Available equipment (${available}/${equipment.length})\n`;
+    defaultResponse += `• Info on ${sample.name}\n`;
+  } else {
+    defaultResponse += `• Request new equipment\n`;
+  }
+  defaultResponse += `\n`;
+
+  defaultResponse += "📋 **Your Requests**\n";
+  if (userBorrowings.length > 0) {
+    defaultResponse += `• Check my ${userBorrowings.length} requests\n`;
+  }
+  defaultResponse += `• View borrowing history\n\n`;
+
+  defaultResponse += "🛡️ **Safety & Schedules**\n";
+  if (schedules.length > 0) {
+    defaultResponse += `• Today's schedule\n`;
+  }
+  defaultResponse += `• Lab safety tips\n`;
+  defaultResponse += `• PPE requirements\n\n`;
+
+  if (userRole === 'admin' || userRole === 'technician') {
+    defaultResponse += "💼 **Admin Tools**\n";
+    defaultResponse += `• System alerts\n`;
+    defaultResponse += `• Review requests\n`;
+    defaultResponse += `• Update inventory\n\n`;
+  }
+
+  defaultResponse += "💬 Ask me anything lab-related! (e.g., 'Help with protocols')";
 
   await logChatbotQuery(userId, sanitizedMessage, defaultResponse, 'default');
   return defaultResponse;
@@ -365,11 +412,17 @@ async function handleChemicalDetailsQuery(message, conversationId = null) {
       chemicals.slice(0, 5).forEach((chem, index) => {
         response += `${index + 1}. ${chem.name} (${chem.category}) - ${chem.quantity} ${chem.unit}\n`;
       });
-      response += `\nAsk me about any specific chemical for detailed information. For example: "What are the details of sodium chloride?"`;
+      response += `\nAsk me about any specific chemical for detailed information. For example: "What are the details of ${chemicals[0].name}?"`;
       return response;
     }
 
-    return `No chemicals found in the inventory. Try asking about specific chemicals like "sodium chloride" or "hydrochloric acid".`;
+    // Check if entire inventory is empty
+    const allChemicals = await getChemicals();
+    if (allChemicals.length === 0) {
+      return `Our chemical inventory is currently empty. Please contact lab administration to restock. You can still ask about equipment, schedules, or safety information.`;
+    }
+
+    return `I couldn't find chemicals matching your query. Try asking about general availability with "What chemicals are available?" or specify a different term.`;
   } catch (error) {
     console.error('Chemical details query error:', error);
     return "Sorry, I'm having trouble accessing the chemical details right now.";
@@ -479,11 +532,17 @@ async function handleEquipmentDetailsQuery(message, conversationId = null) {
       equipments.slice(0, 5).forEach((eq, index) => {
         response += `${index + 1}. ${eq.name} (${eq.category}) - ${eq.condition}\n`;
       });
-      response += `\nAsk me about any specific equipment for detailed information. For example: "What are the details of microscope?"`;
+      response += `\nAsk me about any specific equipment for detailed information. For example: "What are the details of ${equipments[0].name}?"`;
       return response;
     }
 
-    return `No equipment found in the inventory. Try asking about specific equipment like "microscope" or "centrifuge".`;
+    // Check if entire inventory is empty
+    const allEquipment = await getEquipment();
+    if (allEquipment.length === 0) {
+      return `Our equipment inventory is currently empty. Please contact lab administration. You can still ask about schedules, safety information, or submit purchase requests.`;
+    }
+
+    return `I couldn't find equipment matching your query. Try asking about general availability with "What equipment is available?" or specify a different term.`;
   } catch (error) {
     console.error('Equipment details query error:', error);
     return "Sorry, I'm having trouble accessing the equipment details right now.";
@@ -510,7 +569,7 @@ async function handleChemicalQuery(message, userId) {
     }
     
     if (specificChemical) {
-      const filteredChemicals = chemicals.filter(c => 
+      const filteredChemicals = chemicals.filter(c =>
         c.name.toLowerCase().includes(specificChemical)
       );
       
@@ -523,6 +582,10 @@ async function handleChemicalQuery(message, userId) {
       } else {
         return `Sorry, we don't have ${specificChemical} in stock right now.`;
       }
+    }
+    
+    if (count === 0) {
+      return `No chemicals are currently available in our inventory. Please check back later or contact lab administration to restock.`;
     }
     
     return `I found ${count} chemicals in our inventory. Some popular ones include:\n` +
@@ -540,6 +603,10 @@ async function handleEquipmentQuery(message, userId) {
   try {
     const equipment = await getEquipment();
     const availableCount = equipment.filter(e => e.status === 'available').length;
+    
+    if (equipment.length === 0) {
+      return `No equipment is currently available in our inventory. Please check back later or contact lab administration.`;
+    }
     
     return `We have ${equipment.length} pieces of equipment in total, with ${availableCount} currently available.\n` +
            `Popular equipment includes:\n` +
@@ -726,55 +793,79 @@ async function handleHistoryQuery(message, userId, userRole) {
 }
 
 async function handleHelpQuery(message, userId, userRole) {
-  let helpText = "🤖 **I'm ChemBot, your lab assistant!**\n\n";
+  let helpText = "🤖 **ChemBot Help: Your Lab Assistant!**\n\n";
+  helpText += "**What I Can Do:**\n\n";
 
-  helpText += "🔬 **Chemical Management**\n";
-  helpText += "• 'What chemicals do we have?'\n";
-  helpText += "• 'Details of sodium chloride'\n";
-  helpText += "• 'Show me available chemicals'\n";
-  helpText += "• 'What chemicals are running low?'\n";
-  helpText += "• 'Show me expiring chemicals'\n\n";
+  // Check current system state for dynamic suggestions
+  const chemicals = await getChemicals();
+  const equipment = await getEquipment();
+  const schedules = await getLectureSchedules();
+  const borrowings = await getBorrowings();
+  const userBorrowings = borrowings.filter(b => b.borrower_id === userId);
 
-  helpText += "⚙️ **Equipment Management**\n";
-  helpText += "• 'What equipment is available?'\n";
-  helpText += "• 'Details of microscope'\n";
-  helpText += "• 'Show me equipment status'\n";
-  helpText += "• 'Book the HPLC for tomorrow'\n";
-  helpText += "• 'What equipment needs maintenance?'\n\n";
+  // Core lab functions
+  helpText += "🔬 **Lab Inventory**\n";
+  if (chemicals.length > 0) {
+    const sample = chemicals[0];
+    helpText += `• Search chemicals (${chemicals.length} available)\n`;
+    helpText += `• Details: "${sample.name}"\n`;
+    if (chemicals.length > 5) helpText += `• Low stock alerts\n`;
+  } else {
+    helpText += `• Request chemical restock\n`;
+  }
+  helpText += `\n`;
 
-  helpText += "📋 **Borrowing Requests**\n";
-  helpText += "• 'I need to borrow equipment'\n";
-  helpText += "• 'Check status of my requests'\n";
-  helpText += "• 'My borrowing history'\n\n";
+  helpText += "⚙️ **Equipment**\n";
+  if (equipment.length > 0) {
+    const sample = equipment[0];
+    const available = equipment.filter(e => e.status === 'available').length;
+    helpText += `• Available items (${available}/${equipment.length})\n`;
+    helpText += `• Equipment info: "${sample.name}"\n`;
+    helpText += `• Book equipment\n`;
+  } else {
+    helpText += `• Request new equipment\n`;
+  }
+  helpText += `\n`;
 
-  helpText += "📅 **Lab Schedules**\n";
-  helpText += "• 'What's today's schedule?'\n";
-  helpText += "• 'Schedule for tomorrow'\n";
-  helpText += "• 'Lab booking information'\n\n";
+  // User-specific requests
+  helpText += "📋 **Requests & History**\n";
+  if (userBorrowings.length > 0) {
+    helpText += `• Check my ${userBorrowings.length} requests\n`;
+  } else {
+    helpText += `• Submit borrowing request\n`;
+  }
+  helpText += `• View my history\n\n`;
 
-  helpText += "🛡️ **Safety Information**\n";
-  helpText += "• 'Safety precautions for acids'\n";
-  helpText += "• 'What PPE should I wear?'\n";
-  helpText += "• 'Chemical spill procedure'\n";
-  helpText += "• 'Are these chemicals compatible?'\n\n";
+  // Schedules and safety
+  helpText += "📅 **Schedules & Safety**\n";
+  if (schedules.length > 0) {
+    const today = new Date().toISOString().split('T')[0];
+    const todaySchedules = schedules.filter(s => s.date === today);
+    if (todaySchedules.length > 0) helpText += `• Today's schedule (${todaySchedules.length})\n`;
+    helpText += `• Tomorrow's labs\n`;
+  }
+  helpText += `• Safety tips (acids, PPE, spills)\n`;
+  helpText += `• Chemical compatibility\n\n`;
 
-  helpText += "🛒 **Purchase Requests**\n";
-  helpText += "• 'Request purchase of methanol'\n";
-  helpText += "• 'I need to order sodium chloride'\n\n";
+  // Advanced features
+  helpText += "🛒 **Requests & Protocols**\n";
+  if (chemicals.length === 0 || equipment.length === 0) {
+    helpText += `• Purchase requests for supplies\n`;
+  } else {
+    helpText += `• Request reagents (e.g., methanol)\n`;
+  }
+  helpText += `• Protocol suggestions (titration, distillation)\n\n`;
 
-  helpText += "🔬 **Protocol Suggestions**\n";
-  helpText += "• 'Suggest protocol for titration'\n";
-  helpText += "• 'What equipment do I need for distillation?'\n\n";
-
+  // Role-specific
   if (userRole === 'admin' || userRole === 'technician') {
-    helpText += "💼 **Staff Functions**\n";
-    helpText += "• 'Show pending approvals'\n";
-    helpText += "• 'Update inventory'\n";
-    helpText += "• 'System alerts'\n";
-    helpText += "• 'Maintenance reminders'\n\n";
+    helpText += "💼 **Staff Tools**\n";
+    helpText += `• System alerts & notifications\n`;
+    helpText += `• Review pending requests\n`;
+    if (chemicals.length > 0 || equipment.length > 0) helpText += `• Update inventory\n`;
+    helpText += `• Maintenance reminders\n\n`;
   }
 
-  helpText += "Just ask me anything related to the lab!";
+  helpText += "**💬 Examples:**\n• 'What chemicals are low?'\n• 'Book microscope for tomorrow'\n• 'Safety for acids'\n• 'Help with titration protocol'";
 
   return helpText;
 }
@@ -827,8 +918,16 @@ async function handleInventoryAlertsQuery(message) {
       response += "\n**Please contact lab staff to dispose of expired chemicals safely.**\n\n";
     }
 
+    // Check if inventory exists before giving "all normal" message
+    const allChemicals = await getChemicals();
+    const allEquipment = await getEquipment();
+    
     if (response === "📊 **Inventory Alerts**\n\n") {
-      response += "No inventory alerts at this time. All systems normal! ✅";
+      if (allChemicals.length === 0 && allEquipment.length === 0) {
+        response += "⚠️ **Note:** Both chemical and equipment inventories are currently empty. No alerts, but please contact administration to restock.\n\nAll other systems are normal! ✅";
+      } else {
+        response += "No inventory alerts at this time. All systems normal! ✅";
+      }
     }
 
     return response;
@@ -869,8 +968,15 @@ async function handleMaintenanceQuery(message) {
       response += "**✅ All equipment calibration is current**\n\n";
     }
 
+    // Check if equipment exists
+    const allEquipment = await getEquipment();
+    
     if (response === "🔧 **Equipment Maintenance Status**\n\n") {
-      response += "All equipment maintenance is up to date! ✅";
+      if (allEquipment.length === 0) {
+        response += "⚠️ **Note:** No equipment currently in inventory, so no maintenance is scheduled. Please contact administration to add equipment.\n\nAll systems are ready! ✅";
+      } else {
+        response += "All equipment maintenance is up to date! ✅";
+      }
     }
 
     return response;

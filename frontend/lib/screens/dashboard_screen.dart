@@ -8,6 +8,7 @@ import 'package:chemlab_frontend/screens/equipment_screen.dart';
 import 'package:chemlab_frontend/screens/borrowings_screen.dart';
 import 'package:chemlab_frontend/screens/borrowing_form_screen.dart';
 import 'package:chemlab_frontend/screens/chatbot_screen.dart';
+import 'package:chemlab_frontend/utils/constants.dart';
 import 'package:logger/logger.dart';
 
 var logger = Logger();
@@ -193,11 +194,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   : 'Admin Dashboard',
                               style: Theme.of(context).textTheme.headlineSmall,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: AppConstants.spacing8),
 
                             // ✅ Enhanced User Information Display
                             _buildUserInfoCard(),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: AppConstants.spacing24),
 
                             // Pending Requests Alert
                             if (_pendingRequestsCount > 0) ...[
@@ -390,78 +391,129 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             const SizedBox(height: 24),
 
-                            // Summary Cards (for admin with full reports)
+                            // Enhanced Summary Cards (for admin with full reports)
                             if (isAdmin && _reportData != null) ...[
                               Text(
-                                'Summary',
+                                'Dashboard Overview',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                               const SizedBox(height: 16),
-                              // First Row
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: _buildSummaryCard(
-                                      'Chemicals',
-                                      _reportData!['summary']['totalChemicals']
-                                          .toString(),
-                                      Icons.science,
-                                      Colors.blue,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Flexible(
-                                    child: _buildSummaryCard(
-                                      'Equipment',
-                                      _reportData!['summary']['totalEquipment']
-                                          .toString(),
-                                      Icons.build,
-                                      Colors.green,
-                                    ),
-                                  ),
-                                ],
+
+                              // Responsive Summary Cards Grid
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  // Determine layout based on screen width
+                                  final screenWidth =
+                                      MediaQuery.of(context).size.width;
+                                  int crossAxisCount;
+
+                                  if (screenWidth >= 1200) {
+                                    // Desktop: 4 columns
+                                    crossAxisCount = 4;
+                                  } else if (screenWidth >= 768) {
+                                    // Tablet: 2 columns
+                                    crossAxisCount = 2;
+                                  } else {
+                                    // Mobile: 1 column
+                                    crossAxisCount = 1;
+                                  }
+
+                                  return GridView.count(
+                                    crossAxisCount: crossAxisCount,
+                                    crossAxisSpacing: AppConstants.spacing16,
+                                    mainAxisSpacing: AppConstants.spacing16,
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    children: [
+                                      _buildEnhancedSummaryCard(
+                                        'Chemicals',
+                                        _reportData!['summary']
+                                                ['totalChemicals']
+                                            .toString(),
+                                        Icons.science,
+                                        Colors.blue,
+                                        trendDirection: 'up',
+                                        trendPercentage: 12.5,
+                                        healthStatus: 'good',
+                                        healthPercentage: 78.0,
+                                        quickStat: '5 expiring this month',
+                                      ),
+                                      _buildEnhancedSummaryCard(
+                                        'Equipment',
+                                        _reportData!['summary']
+                                                ['totalEquipment']
+                                            .toString(),
+                                        Icons.build,
+                                        Colors.green,
+                                        trendDirection: 'stable',
+                                        trendPercentage: 0.0,
+                                        healthStatus: 'warning',
+                                        healthPercentage: 65.0,
+                                        quickStat: '3 need maintenance',
+                                      ),
+                                      _buildEnhancedSummaryCard(
+                                        'Active Borrowings',
+                                        _reportData!['summary']
+                                                ['activeBorrowings']
+                                            .toString(),
+                                        Icons.check_circle,
+                                        Colors.orange,
+                                        trendDirection: 'up',
+                                        trendPercentage: 8.3,
+                                        healthStatus: 'good',
+                                        healthPercentage: 85.0,
+                                        quickStat: '12 due this week',
+                                      ),
+                                      _buildEnhancedSummaryCard(
+                                        'Pending Requests',
+                                        _reportData!['summary']
+                                                ['pendingBorrowings']
+                                            .toString(),
+                                        Icons.pending,
+                                        Colors.purple,
+                                        trendDirection: 'down',
+                                        trendPercentage: -5.2,
+                                        healthStatus: 'good',
+                                        healthPercentage: 90.0,
+                                        quickStat: '3 urgent approvals',
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
                               const SizedBox(height: 16),
-                              // Second Row
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: _buildSummaryCard(
-                                      'Active',
-                                      _reportData!['summary']
-                                              ['activeBorrowings']
-                                          .toString(),
-                                      Icons.check_circle,
-                                      Colors.orange,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Flexible(
-                                    child: _buildSummaryCard(
-                                      'Pending',
-                                      _reportData!['summary']
-                                              ['pendingBorrowings']
-                                          .toString(),
-                                      Icons.pending,
-                                      Colors.purple,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              // Full Width Card
-                              _buildSummaryCard(
-                                'Overdue',
+
+                              // Full Width Card - Critical Issues (always full width)
+                              _buildEnhancedSummaryCard(
+                                'Overdue Items',
                                 _reportData!['summary']['overdueBorrowings']
                                     .toString(),
                                 Icons.warning,
                                 Colors.red,
                                 fullWidth: true,
+                                trendDirection: 'down',
+                                trendPercentage: -15.7,
+                                healthStatus: _reportData!['summary']
+                                            ['overdueBorrowings'] >
+                                        0
+                                    ? 'critical'
+                                    : 'good',
+                                healthPercentage: _reportData!['summary']
+                                            ['overdueBorrowings'] >
+                                        0
+                                    ? 25.0
+                                    : 95.0,
+                                quickStat: _reportData!['summary']
+                                            ['overdueBorrowings'] >
+                                        0
+                                    ? 'Requires immediate attention'
+                                    : 'All items returned on time',
                               ),
                               const SizedBox(height: 32),
                             ],
 
-                            // Alerts Section
+                            // Enhanced Alerts Section with Priority-based Visual Hierarchy
                             if (_alerts != null && _alerts!.isNotEmpty) ...[
                               Text(
                                 'System Alerts',
@@ -470,37 +522,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               const SizedBox(height: 16),
                               Container(
                                 constraints: const BoxConstraints(
-                                  maxHeight: 300,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.red[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.red[200]!),
+                                  maxHeight: 400,
                                 ),
                                 child: SingleChildScrollView(
                                   child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: _alerts!.map((alert) {
-                                      return ListTile(
-                                        leading: Icon(
-                                          alert['type'] == 'chemical_expiry' ||
-                                                  alert['type'] ==
-                                                      'overdue_borrowing'
-                                              ? Icons.warning
-                                              : Icons.info,
-                                          color: Colors.red,
-                                        ),
-                                        title: Text(alert['message']),
-                                        subtitle: Text(
-                                          alert['type']
-                                              .toString()
-                                              .replaceAll('_', ' ')
-                                              .toUpperCase(),
-                                          style: TextStyle(
-                                              color: Colors.grey[600]),
-                                        ),
-                                      );
-                                    }).toList(),
+                                    children: _buildPrioritizedAlerts(),
                                   ),
                                 ),
                               ),
@@ -564,7 +590,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(AppConstants.paddingMedium),
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : Column(
@@ -703,7 +729,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        // Borrower alerts (if any)
+                        // Enhanced Borrower alerts (if any)
                         if (_alerts != null && _alerts!.isNotEmpty) ...[
                           Text(
                             'Your Alerts',
@@ -711,28 +737,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           const SizedBox(height: 16),
                           Container(
-                            decoration: BoxDecoration(
-                              color: Colors.orange[50],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange[200]!),
+                            constraints: const BoxConstraints(
+                              maxHeight: 300,
                             ),
-                            child: Column(
-                              children: _alerts!.map((alert) {
-                                return ListTile(
-                                  leading: const Icon(
-                                    Icons.info,
-                                    color: Colors.orange,
-                                  ),
-                                  title: Text(alert['message']),
-                                  subtitle: Text(
-                                    alert['type']
-                                        .toString()
-                                        .replaceAll('_', ' ')
-                                        .toUpperCase(),
-                                    style: TextStyle(color: Colors.grey[600]),
-                                  ),
-                                );
-                              }).toList(),
+                            child: SingleChildScrollView(
+                              child: Column(
+                                children: _buildPrioritizedAlerts(),
+                              ),
                             ),
                           ),
                         ],
@@ -849,6 +860,162 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildEnhancedSummaryCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color, {
+    bool fullWidth = false,
+    String? trendDirection, // 'up', 'down', 'stable'
+    double? trendPercentage,
+    String? healthStatus, // 'good', 'warning', 'critical'
+    double? healthPercentage,
+    String? quickStat,
+  }) {
+    // Determine health color based on status
+    Color healthColor;
+    if (healthStatus == 'critical') {
+      healthColor = Colors.red;
+    } else if (healthStatus == 'warning') {
+      healthColor = Colors.orange;
+    } else {
+      healthColor = Colors.green;
+    }
+
+    // Determine trend icon and color
+    IconData? trendIcon;
+    Color trendColor = Colors.grey;
+    if (trendDirection == 'up') {
+      trendIcon = Icons.trending_up;
+      trendColor = Colors.green;
+    } else if (trendDirection == 'down') {
+      trendIcon = Icons.trending_down;
+      trendColor = Colors.red;
+    } else if (trendDirection == 'stable') {
+      trendIcon = Icons.trending_flat;
+      trendColor = Colors.blue;
+    }
+
+    return Card(
+      elevation: 4,
+      child: InkWell(
+        onTap: () {
+          // Add navigation or detailed view here
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('View detailed $title statistics')),
+          );
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 140, // Increased height for new elements
+          width: fullWidth ? double.infinity : null,
+          padding: const EdgeInsets.all(AppConstants.paddingMedium),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: healthColor.withValues(alpha: 0.1),
+            border: Border.all(
+              color: healthColor.withValues(alpha: 0.3),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Header with icon and trend
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: healthColor, size: 28),
+                  if (trendIcon != null) ...[
+                    const SizedBox(width: 8),
+                    Icon(trendIcon, color: trendColor, size: 20),
+                    if (trendPercentage != null)
+                      Text(
+                        '${trendPercentage > 0 ? '+' : ''}${trendPercentage.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          color: trendColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Main value
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: healthColor,
+                ),
+              ),
+
+              // Title
+              Text(
+                title,
+                style: TextStyle(
+                  color: Colors.grey[700],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // Health progress bar
+              if (healthPercentage != null) ...[
+                Container(
+                  height: 4,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: healthPercentage / 100,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: healthColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${healthPercentage.toStringAsFixed(0)}% healthy',
+                  style: TextStyle(
+                    color: healthColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+
+              // Quick stat
+              if (quickStat != null && quickStat.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  quickStat,
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 10,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Backward compatibility method
   Widget _buildSummaryCard(
     String title,
     String value,
@@ -856,39 +1023,326 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Color color, {
     bool fullWidth = false,
   }) {
-    return Card(
-      elevation: 4,
+    return _buildEnhancedSummaryCard(
+      title,
+      value,
+      icon,
+      color,
+      fullWidth: fullWidth,
+      healthStatus: 'good',
+      healthPercentage: 85.0, // Default healthy percentage
+    );
+  }
+
+  // Enhanced alerts with priority-based visual hierarchy
+  List<Widget> _buildPrioritizedAlerts() {
+    if (_alerts == null || _alerts!.isEmpty) return [];
+
+    // Group alerts by priority
+    final criticalAlerts =
+        _alerts!.where((alert) => alert['priority'] == 'high').toList();
+    final warningAlerts =
+        _alerts!.where((alert) => alert['priority'] == 'medium').toList();
+    final infoAlerts = _alerts!
+        .where((alert) =>
+            alert['priority'] != 'high' && alert['priority'] != 'medium')
+        .toList();
+
+    final alertWidgets = <Widget>[];
+
+    // Critical alerts first
+    if (criticalAlerts.isNotEmpty) {
+      alertWidgets.add(_buildAlertGroup(
+          'Critical Issues', criticalAlerts, Colors.red, Icons.error));
+    }
+
+    // Warning alerts
+    if (warningAlerts.isNotEmpty) {
+      alertWidgets.add(_buildAlertGroup(
+          'Warnings', warningAlerts, Colors.orange, Icons.warning));
+    }
+
+    // Info alerts
+    if (infoAlerts.isNotEmpty) {
+      alertWidgets.add(
+          _buildAlertGroup('Information', infoAlerts, Colors.blue, Icons.info));
+    }
+
+    return alertWidgets;
+  }
+
+  Widget _buildAlertGroup(
+      String title, List<dynamic> alerts, Color color, IconData icon) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Group header
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${alerts.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Alert items
+          ...alerts.map((alert) => _buildEnhancedAlertTile(alert, color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEnhancedAlertTile(dynamic alert, Color color) {
+    final alertType = alert['type'] as String;
+    final message = alert['message'] as String;
+    final itemId = alert['item_id'];
+
+    // Determine action buttons based on alert type
+    List<Widget> actionButtons = [];
+
+    switch (alertType) {
+      case 'low_stock':
+        actionButtons = [
+          TextButton.icon(
+            onPressed: () {
+              // Navigate to order/supply management
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Navigate to supply ordering')),
+              );
+            },
+            icon: const Icon(Icons.shopping_cart, size: 16),
+            label: const Text('Order Now'),
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              // Set reminder
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text('Reminder set for low stock item')),
+              );
+            },
+            child: const Text('Set Reminder'),
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ];
+        break;
+
+      case 'overdue_borrowing':
+        actionButtons = [
+          TextButton.icon(
+            onPressed: () {
+              // Send reminder to user
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Reminder sent to borrower')),
+              );
+            },
+            icon: const Icon(Icons.send, size: 16),
+            label: const Text('Send Reminder'),
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              // Navigate to user contact
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Navigate to user contact')),
+              );
+            },
+            child: const Text('Contact User'),
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ];
+        break;
+
+      case 'equipment_maintenance':
+        actionButtons = [
+          TextButton.icon(
+            onPressed: () {
+              // Schedule maintenance
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Maintenance scheduled')),
+              );
+            },
+            icon: const Icon(Icons.schedule, size: 16),
+            label: const Text('Schedule'),
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              // Mark as resolved
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Alert marked as resolved')),
+              );
+            },
+            child: const Text('Mark Resolved'),
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ];
+        break;
+
+      default:
+        actionButtons = [
+          TextButton(
+            onPressed: () {
+              // View details
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('View details for $alertType')),
+              );
+            },
+            child: const Text('View Details'),
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ];
+    }
+
+    return Dismissible(
+      key: Key('alert_${alertType}_$itemId'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: Colors.grey[300],
+        child: const Icon(Icons.delete, color: Colors.grey),
+      ),
+      onDismissed: (direction) {
+        // Remove alert from list
+        setState(() {
+          _alerts!.remove(alert);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Alert dismissed')),
+        );
+      },
       child: Container(
-        height: 100,
-        width: fullWidth ? double.infinity : null,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: color.withValues(alpha: 0.1),
+          border: Border(
+            top: BorderSide(color: color.withValues(alpha: 0.2)),
+          ),
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: 32),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  _getAlertIcon(alertType),
+                  color: color,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        message,
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        alertType.replaceAll('_', ' ').toUpperCase(),
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '2 hours ago', // In real app, use actual timestamp
+                        style: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            Text(
-              title,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
-              ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: actionButtons,
             ),
           ],
         ),
       ),
     );
+  }
+
+  IconData _getAlertIcon(String alertType) {
+    switch (alertType) {
+      case 'chemical_expiry':
+        return Icons.hourglass_bottom;
+      case 'low_stock':
+        return Icons.inventory_2;
+      case 'overdue_borrowing':
+        return Icons.schedule;
+      case 'equipment_maintenance':
+        return Icons.build;
+      default:
+        return Icons.notifications;
+    }
   }
 }

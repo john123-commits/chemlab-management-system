@@ -368,23 +368,25 @@ class _LectureScheduleDetailsScreenState
                                       : const Text('Reject Request'),
                                 ),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: _isLoading
-                                      ? null
-                                      : () => _updateStatus('confirmed'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 16),
+                              if (isTechnician) ...[
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: _isLoading
+                                        ? null
+                                        : () => _updateStatus('confirmed'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 16),
+                                    ),
+                                    child: _isLoading
+                                        ? const CircularProgressIndicator()
+                                        : const Text('Confirm Request'),
                                   ),
-                                  child: _isLoading
-                                      ? const CircularProgressIndicator()
-                                      : const Text('Confirm Request'),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
                         ],

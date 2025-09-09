@@ -174,15 +174,32 @@ router.post('/live-chat/start', authenticateToken, async (req, res) => {
       port: process.env.DB_PORT,
     });
 
+    // Check if conversation already exists between these users
+    const existingConv = await pool.query(
+      `SELECT * FROM chat_conversations
+       WHERE (user_id = $1 AND admin_id = $2) OR (user_id = $2 AND admin_id = $1)
+         AND conversation_type = 'live' AND deleted_at IS NULL`,
+      [userId, adminId]
+    );
+
+    if (existingConv.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'Live chat already exists between these users',
+        conversation: existingConv.rows[0]
+      });
+    }
+
     const result = await pool.query(
       'INSERT INTO chat_conversations (user_id, admin_id, conversation_type, status, title) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [userId, adminId, 'live', 'active', title || 'Live Support']
     );
 
-    // Send initial message
+    // Send initial message (unread for the user)
     await pool.query(
-      'INSERT INTO chat_messages (conversation_id, sender_type, sender_id, message_text, message_type) VALUES ($1, $2, $3, $4, $5)',
-      [result.rows[0].id, 'admin', adminId, 'Hello! How can I help you today?', 'text']
+      `INSERT INTO chat_messages (conversation_id, sender_type, sender_id, message_text, message_type, is_read)
+       VALUES ($1, $2, $3, $4, $5, false)`,
+      [result.rows[0].id, adminRole, adminId, 'Hello! How can I help you today?', 'text']
     );
 
     res.json({
@@ -200,7 +217,7 @@ router.post('/live-chat/message', authenticateToken, async (req, res) => {
   try {
     const { conversationId, message } = req.body;
     const senderId = req.user.id;
-    const senderType = req.user.role === 'admin' || req.user.role === 'technician' ? 'admin' : 'user';
+    const senderType = req.user.role;
 
     const { Pool } = require('pg');
     const pool = new Pool({
@@ -247,19 +264,82 @@ router.get('/live-chat/conversations', authenticateToken, async (req, res) => {
       port: process.env.DB_PORT,
     });
 
-    let query, values;
+    let conversationsQuery, unreadQuery, values;
     if (userRole === 'admin' || userRole === 'technician') {
-      // Admin/technician sees all conversations
-      query = 'SELECT * FROM chat_conversations WHERE conversation_type = $1 ORDER BY updated_at DESC';
-      values = ['live'];
+      // Admin/technician sees all conversations with unread counts from all users
+      conversationsQuery = `
+        SELECT cc.*,
+               COALESCE(unread_count, 0) as unread_count,
+               u.name as other_user_name,
+               u.role as other_user_role
+        FROM chat_conversations cc
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) as unread_count
+          FROM chat_messages cm
+          WHERE cm.conversation_id = cc.id
+            AND cm.sender_type != 'admin'
+            AND cm.sender_type != 'technician'
+            AND cm.is_read = false
+        ) unread ON true
+        LEFT JOIN users u ON (
+          CASE
+            WHEN cc.user_id != $1 THEN cc.user_id
+            ELSE NULL
+          END = u.id
+        )
+        WHERE cc.conversation_type = $2
+          AND cc.deleted_at IS NULL
+        ORDER BY cc.updated_at DESC
+      `;
+      values = [userId, 'live'];
     } else {
-      // User sees only their conversations
-      query = 'SELECT * FROM chat_conversations WHERE user_id = $1 AND conversation_type = $2 ORDER BY updated_at DESC';
+      // User sees only their conversations with their unread counts
+      conversationsQuery = `
+        SELECT cc.*,
+               COALESCE(unread_count, 0) as unread_count
+        FROM chat_conversations cc
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) as unread_count
+          FROM chat_messages cm
+          WHERE cm.conversation_id = cc.id
+            AND cm.sender_type != 'user'
+            AND cm.is_read = false
+        ) unread ON true
+        WHERE cc.user_id = $1
+          AND cc.conversation_type = $2
+          AND cc.deleted_at IS NULL
+        ORDER BY cc.updated_at DESC
+      `;
       values = [userId, 'live'];
     }
 
-    const result = await pool.query(query, values);
-    res.json({ success: true, conversations: result.rows });
+    const result = await pool.query(conversationsQuery, values);
+    
+    // Add last message preview for each conversation
+    const conversationsWithPreview = await Promise.all(
+      result.rows.map(async (conv) => {
+        const lastMessage = await pool.query(
+          `SELECT cm.message_text, cm.sender_type, cm.created_at, u.name as sender_name
+           FROM chat_messages cm
+           LEFT JOIN users u ON cm.sender_id = u.id
+           WHERE cm.conversation_id = $1 AND cm.deleted_at IS NULL
+           ORDER BY cm.created_at DESC
+           LIMIT 1`,
+          [conv.id]
+        );
+        
+        return {
+          ...conv,
+          last_message: lastMessage.rows[0] || null,
+          last_message_time: lastMessage.rows[0]?.created_at || conv.updated_at
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      conversations: conversationsWithPreview
+    });
   } catch (error) {
     console.error('Get live chat conversations error:', error);
     res.status(500).json({ success: false, error: error.message || 'Internal server error' });
@@ -299,7 +379,7 @@ router.get('/live-chat/messages/:conversationId', authenticateToken, async (req,
 
     // Get messages
     const messagesResult = await pool.query(
-      'SELECT cm.*, u.name as sender_name FROM chat_messages cm LEFT JOIN users u ON cm.sender_id = u.id WHERE cm.conversation_id = $1 ORDER BY cm.created_at ASC',
+      'SELECT cm.*, u.name as sender_name FROM chat_messages cm LEFT JOIN users u ON cm.sender_id = u.id WHERE cm.conversation_id = $1 AND cm.deleted_at IS NULL ORDER BY cm.created_at ASC',
       [conversationId]
     );
 
@@ -347,12 +427,113 @@ router.put('/live-chat/conversations/:conversationId/close', authenticateToken, 
     // Close conversation
     await pool.query(
       'UPDATE chat_conversations SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      ['closed', conversationId]
+      ['ended', conversationId]
     );
 
     res.json({ success: true, message: 'Conversation closed successfully' });
   } catch (error) {
     console.error('Close live chat conversation error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
+});
+
+// Delete live chat conversation endpoint
+router.delete('/live-chat/conversations/:conversationId', authenticateToken, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      password: process.env.DB_PASSWORD,
+      port: process.env.DB_PORT,
+    });
+
+    // Check if user has permission to delete this conversation
+    const convResult = await pool.query(
+      'SELECT * FROM chat_conversations WHERE id = $1',
+      [conversationId]
+    );
+
+    if (convResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Conversation not found' });
+    }
+
+    const conversation = convResult.rows[0];
+    if (conversation.user_id !== userId && conversation.admin_id !== userId &&
+        (userRole !== 'admin' && userRole !== 'technician')) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // Soft delete by setting deleted_at timestamp
+    await pool.query(
+      'UPDATE chat_conversations SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [conversationId]
+    );
+
+    // Optionally, also delete associated messages if hard delete is preferred
+    // await pool.query('DELETE FROM chat_messages WHERE conversation_id = $1', [conversationId]);
+
+    res.json({ success: true, message: 'Conversation deleted successfully' });
+  } catch (error) {
+    console.error('Delete live chat conversation error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
+});
+
+// Delete live chat message endpoint
+router.delete('/live-chat/messages/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      password: process.env.DB_PASSWORD,
+      port: process.env.DB_PORT,
+    });
+
+    // Check if user has access to this message
+    const messageResult = await pool.query(`
+      SELECT cm.*, cc.user_id, cc.admin_id
+      FROM chat_messages cm
+      JOIN chat_conversations cc ON cm.conversation_id = cc.id
+      WHERE cm.id = $1 AND cm.deleted_at IS NULL
+    `, [messageId]);
+
+    if (messageResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Message not found' });
+    }
+
+    const message = messageResult.rows[0];
+    
+    // Permission check: user can only delete their own messages or if they own the conversation
+    const canDelete = (message.sender_id === userId) ||
+                     (message.user_id === userId) ||
+                     (message.admin_id === userId) ||
+                     (userRole === 'admin' || userRole === 'technician');
+
+    if (!canDelete) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // Soft delete message
+    await pool.query(
+      'UPDATE chat_messages SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [messageId]
+    );
+
+    res.json({ success: true, message: 'Message deleted successfully' });
+  } catch (error) {
+    console.error('Delete live chat message error:', error);
     res.status(500).json({ success: false, error: error.message || 'Internal server error' });
   }
 });
@@ -424,6 +605,216 @@ router.post('/cache/clear', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Cache clear error:', error);
     res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
+});
+
+router.post('/live-chat/mark-read/:conversationId', authenticateToken, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      password: process.env.DB_PASSWORD,
+      port: process.env.DB_PORT,
+    });
+
+    // Check if user has access to this conversation
+    const convResult = await pool.query(
+      'SELECT * FROM chat_conversations WHERE id = $1',
+      [conversationId]
+    );
+
+    if (convResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Conversation not found' });
+    }
+
+    const conversation = convResult.rows[0];
+    
+    // Determine who can mark messages as read
+    let senderCondition;
+    if (userRole === 'admin' || userRole === 'technician') {
+      // Staff can mark user messages as read
+      senderCondition = "cm.sender_type != 'admin' AND cm.sender_type != 'technician'";
+    } else {
+      // Users can mark staff messages as read
+      senderCondition = "cm.sender_type != 'user'";
+    }
+
+    // Check if user is part of this conversation
+    const isParticipant = conversation.user_id === userId || conversation.admin_id === userId ||
+                         (userRole === 'admin' || userRole === 'technician');
+    
+    if (!isParticipant) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    // Mark unread messages as read
+    const updateResult = await pool.query(
+      `UPDATE chat_messages
+       SET is_read = true, read_at = CURRENT_TIMESTAMP
+       WHERE conversation_id = $1
+         AND is_read = false
+         AND (${senderCondition})
+       RETURNING id`,
+      [conversationId]
+    );
+
+    // Get updated unread count
+    const unreadCountResult = await pool.query(
+      `SELECT COUNT(*) as unread_count
+       FROM chat_messages cm
+       WHERE cm.conversation_id = $1
+         AND cm.is_read = false
+         AND (${senderCondition})`,
+      [conversationId]
+    );
+
+    res.json({
+      success: true,
+      messages_marked_read: updateResult.rowCount,
+      remaining_unread: parseInt(unreadCountResult.rows[0].unread_count),
+      message: `Marked ${updateResult.rowCount} message(s) as read`
+    });
+  } catch (error) {
+    console.error('Mark messages as read error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
+});
+
+router.get('/live-chat/unread-count', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      password: process.env.DB_PASSWORD,
+      port: process.env.DB_PORT,
+    });
+
+    let unreadQuery, values;
+    if (userRole === 'admin' || userRole === 'technician') {
+      // Staff gets total unread from all users
+      unreadQuery = `
+        SELECT
+          cc.id as conversation_id,
+          cc.title,
+          u.name as user_name,
+          COUNT(cm.id) as unread_count,
+          MAX(cm.created_at) as last_message_time
+        FROM chat_conversations cc
+        JOIN users u ON cc.user_id = u.id
+        LEFT JOIN chat_messages cm ON cm.conversation_id = cc.id
+          AND cm.is_read = false
+          AND cm.sender_type != 'admin'
+          AND cm.sender_type != 'technician'
+        WHERE cc.conversation_type = 'live'
+          AND cc.deleted_at IS NULL
+          AND cc.status = 'active'
+        GROUP BY cc.id, cc.title, u.name
+        HAVING COUNT(cm.id) > 0
+        ORDER BY last_message_time DESC
+      `;
+      values = [];
+    } else {
+      // Users get their unread count
+      unreadQuery = `
+        SELECT
+          cc.id as conversation_id,
+          cc.title,
+          COUNT(cm.id) as unread_count,
+          MAX(cm.created_at) as last_message_time
+        FROM chat_conversations cc
+        LEFT JOIN chat_messages cm ON cm.conversation_id = cc.id
+          AND cm.is_read = false
+          AND cm.sender_type != 'user'
+        WHERE cc.user_id = $1
+          AND cc.conversation_type = 'live'
+          AND cc.deleted_at IS NULL
+          AND cc.status = 'active'
+        GROUP BY cc.id, cc.title
+        HAVING COUNT(cm.id) > 0
+        ORDER BY last_message_time DESC
+      `;
+      values = [userId];
+    }
+
+    const result = await pool.query(unreadQuery, values);
+    
+    // Get total unread count
+    const totalUnread = result.rows.reduce((sum, row) => sum + row.unread_count, 0);
+
+    res.json({
+      success: true,
+      total_unread: totalUnread,
+      conversations_with_unread: result.rows,
+      last_checked: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Get unread count error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal server error' });
+  }
+});
+
+router.get('/live-chat/users', authenticateToken, async (req, res) => {
+  try {
+    const userRole = req.user.role;
+    
+    // Only allow admin and technician to load users for live chat
+    if (userRole !== 'admin' && userRole !== 'technician') {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: Admin or technician only'
+      });
+    }
+
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      password: process.env.DB_PASSWORD,
+      port: process.env.DB_PORT,
+    });
+
+    // Load users who can be chatted with (regular users/students, excluding staff)
+    const usersResult = await pool.query(
+      `SELECT id, name, email, role, created_at
+       FROM users
+       WHERE role = 'user'
+         AND deleted_at IS NULL
+       ORDER BY name ASC`,
+      []
+    );
+
+    // Sanitize and return users
+    const sanitizedUsers = usersResult.rows.map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      created_at: user.created_at
+    }));
+
+    res.json({
+      success: true,
+      users: sanitizedUsers,
+      count: sanitizedUsers.length
+    });
+  } catch (error) {
+    console.error('Load live chat users error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load users: ' + (error.message || 'Internal server error')
+    });
   }
 });
 

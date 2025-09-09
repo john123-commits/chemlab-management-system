@@ -75,16 +75,25 @@ describe('ChemBot Core Functionality', () => {
   });
 
   describe('Help Queries', () => {
-    test('should return help response for "help"', async () => {
+    test('should return improved help response for "help"', async () => {
+      getChemicals.mockResolvedValue([{ name: 'Test Chemical' }]);
+      getEquipment.mockResolvedValue([{ name: 'Test Equipment', status: 'available' }]);
+      getLectureSchedules.mockResolvedValue([{ date: new Date().toISOString().split('T')[0] }]);
+      getBorrowings.mockResolvedValue([]);
+  
       const response = await processChatMessage('help', 1, 'borrower');
-      expect(response).toContain('ChemBot at your service');
-      expect(response).toContain('Chemical Management');
-      expect(response).toContain('Equipment Management');
+      expect(response).toContain('ChemBot Help: Your Lab Assistant!');
+      expect(response).toContain('Lab Inventory');
+      expect(response).toContain('Test Chemical');
+      expect(response).toContain('Available items');
+      expect(response).toContain('Examples');
+      expect(response).toMatch(/Search chemicals \(\d+ available\)/);
     });
-
+  
     test('should return help response for "what can you do"', async () => {
       const response = await processChatMessage('what can you do', 1, 'borrower');
-      expect(response).toContain('ChemBot at your service');
+      expect(response).toContain('ChemBot Help: Your Lab Assistant!');
+      expect(response).toContain('What I Can Do');
     });
   });
 
@@ -113,6 +122,18 @@ describe('ChemBot Core Functionality', () => {
       const response = await processChatMessage('What are the details of nonexistent chemical?', 1, 'borrower');
       expect(response).toContain('couldn\'t find details');
     });
+
+    test('should handle empty chemical inventory with improved default response', async () => {
+      getChemicals.mockResolvedValue([]);
+      getEquipment.mockResolvedValue([{ name: 'Test Equipment' }]);
+      getLectureSchedules.mockResolvedValue([]);
+      getBorrowings.mockResolvedValue([]);
+  
+      const response = await processChatMessage('What chemicals are available?', 1, 'borrower');
+      expect(response).toContain('ChemBot: Your Lab Assistant!');
+      expect(response).toContain('Request restock');
+      expect(response).not.toContain('ChemBot at your service');
+    });
   });
 
   describe('Equipment Queries', () => {
@@ -131,6 +152,18 @@ describe('ChemBot Core Functionality', () => {
       expect(response).toContain('Microscope');
       expect(response).toContain('Optical Equipment');
       expect(response).toContain('Good');
+    });
+
+    test('should handle empty equipment inventory with improved default response', async () => {
+      getChemicals.mockResolvedValue([{ name: 'Test Chemical' }]);
+      getEquipment.mockResolvedValue([]);
+      getLectureSchedules.mockResolvedValue([]);
+      getBorrowings.mockResolvedValue([]);
+  
+      const response = await processChatMessage('What equipment is available?', 1, 'borrower');
+      expect(response).toContain('ChemBot: Your Lab Assistant!');
+      expect(response).toContain('Request new equipment');
+      expect(response).not.toContain('No equipment is currently available');
     });
   });
 
@@ -213,17 +246,25 @@ describe('ChemBot Core Functionality', () => {
   });
 
   describe('Error Handling', () => {
-    test('should handle database errors gracefully', async () => {
-      getChemicals.mockRejectedValue(new Error('Database connection failed'));
-
+    test('should handle database errors with improved error response', async () => {
+      getChemicals.mockRejectedValue(new DatabaseError('Database connection failed'));
+  
       const response = await processChatMessage('Show me available chemicals', 1, 'borrower');
-      expect(response).toContain('error');
-      expect(response).toContain('try again');
+      expect(response).toContain('System Busy');
+      expect(response).toContain('try again in a moment');
+      expect(response).toContain('lab database');
     });
-
-    test('should handle validation errors gracefully', async () => {
-      const response = await processChatMessage('Show me details of <script>alert("xss")</script>', 1, 'borrower');
-      expect(response).toContain('Validation Error');
+  
+    test('should handle validation errors with user-friendly messages', async () => {
+      const longMessage = 'a'.repeat(1001);
+      const response = await processChatMessage(longMessage, 1, 'borrower');
+      expect(response).toContain('Message Too Long');
+      expect(response).toContain('under 1000 characters');
+  
+      // Test invalid input
+      const response2 = await processChatMessage('', 1, 'borrower');
+      expect(response2).toContain('Missing Info');
+      expect(response2).toContain('more details');
     });
   });
 
