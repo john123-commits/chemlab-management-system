@@ -54,7 +54,7 @@ class _ChatBotScreenState extends State<ChatBotScreen> {
 
       // Call your existing API service with proper parameters
       final response =
-          await ApiService.sendChatMessage(message, userId, userRole);
+          await ApiService.sendChatbotMessage(message, userId, userRole);
       _addMessage(response['response'], false);
     } catch (error) {
       _addMessage('Sorry, I encountered an error. Please try again.', false);

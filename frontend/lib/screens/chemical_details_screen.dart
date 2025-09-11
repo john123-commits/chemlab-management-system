@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ChemicalDetailsScreen extends StatelessWidget {
   final Chemical chemical;
@@ -64,15 +65,34 @@ class ChemicalDetailsScreen extends StatelessWidget {
                         fontSize: 16,
                       ),
                     ),
+                    if (chemical.cNumber != null &&
+                        chemical.cNumber!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          'CAS: ${chemical.cNumber}',
+                          style: TextStyle(
+                            color: Colors.blue[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
 
-            // Details Section
+            // Basic Details Section
             Text(
-              'Chemical Details',
+              'Basic Information',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
@@ -94,11 +114,132 @@ class ChemicalDetailsScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     _buildDetailRow('Expiry Date',
                         DateFormat('MMM dd, yyyy').format(chemical.expiryDate)),
+                    if (chemical.cNumber != null &&
+                        chemical.cNumber!.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _buildDetailRow('CAS Number', chemical.cNumber!),
+                    ],
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
+
+            // Physical Properties Section
+            if (_hasPhysicalProperties()) ...[
+              Text(
+                'Physical Properties',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      if (chemical.molecularFormula != null &&
+                          chemical.molecularFormula!.isNotEmpty) ...[
+                        _buildDetailRow(
+                            'Molecular Formula', chemical.molecularFormula!),
+                        const SizedBox(height: 12),
+                      ],
+                      if (chemical.molecularWeight != null) ...[
+                        _buildDetailRow('Molecular Weight',
+                            '${chemical.molecularWeight} g/mol'),
+                        const SizedBox(height: 12),
+                      ],
+                      if (chemical.phicalState != null &&
+                          chemical.phicalState!.isNotEmpty) ...[
+                        _buildDetailRow(
+                            'Physical State', chemical.phicalState!),
+                        const SizedBox(height: 12),
+                      ],
+                      if (chemical.color != null &&
+                          chemical.color!.isNotEmpty) ...[
+                        _buildDetailRow('Color', chemical.color!),
+                        const SizedBox(height: 12),
+                      ],
+                      if (chemical.density != null) ...[
+                        _buildDetailRow('Density', '${chemical.density} g/cm³'),
+                        const SizedBox(height: 12),
+                      ],
+                      if (chemical.meltingPoint != null &&
+                          chemical.meltingPoint!.isNotEmpty) ...[
+                        _buildDetailRow(
+                            'Melting Point', '${chemical.meltingPoint}°C'),
+                        const SizedBox(height: 12),
+                      ],
+                      if (chemical.boilingPoint != null &&
+                          chemical.boilingPoint!.isNotEmpty) ...[
+                        _buildDetailRow(
+                            'Boiling Point', '${chemical.boilingPoint}°C'),
+                        const SizedBox(height: 12),
+                      ],
+                      if (chemical.solubility != null &&
+                          chemical.solubility!.isNotEmpty) ...[
+                        _buildDetailRow('Solubility', chemical.solubility!),
+                        const SizedBox(height: 12),
+                      ],
+                    ]..removeWhere((widget) =>
+                        widget == const SizedBox(height: 12) &&
+                        widget ==
+                            (Column(children: []).children.isNotEmpty
+                                ? (Column(children: []).children.last)
+                                : null)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // Storage & Safety Section
+            if (_hasStorageSafetyInfo()) ...[
+              Text(
+                'Storage & Safety',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+              Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (chemical.storageConditions != null &&
+                          chemical.storageConditions!.isNotEmpty) ...[
+                        _buildDetailRow(
+                            'Storage Conditions', chemical.storageConditions!),
+                        const SizedBox(height: 12),
+                      ],
+                      if (chemical.hazardClass != null &&
+                          chemical.hazardClass!.isNotEmpty) ...[
+                        _buildDetailRow('Hazard Class', chemical.hazardClass!),
+                        const SizedBox(height: 12),
+                      ],
+                      if (chemical.safetyPrecautions != null &&
+                          chemical.safetyPrecautions!.isNotEmpty) ...[
+                        _buildDetailSection(
+                            'Safety Precautions', chemical.safetyPrecautions!),
+                        const SizedBox(height: 12),
+                      ],
+                      if (chemical.safetyInfo != null &&
+                          chemical.safetyInfo!.isNotEmpty) ...[
+                        _buildDetailSection('Additional Safety Information',
+                            chemical.safetyInfo!),
+                      ],
+                    ]..removeWhere((widget) =>
+                        widget == const SizedBox(height: 12) &&
+                        widget ==
+                            (Column(children: []).children.isNotEmpty
+                                ? (Column(children: []).children.last)
+                                : null)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
 
             // Status Section
             Text(
@@ -115,28 +256,60 @@ class ChemicalDetailsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // Safety Data Sheet Section
-            if (chemical.safetyDataSheet != null) ...[
+            // Documents Section
+            if (_hasDocuments()) ...[
               Text(
-                'Documents',
+                'Documents & Links',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
               Card(
                 elevation: 2,
-                child: ListTile(
-                  leading: const Icon(Icons.description, color: Colors.blue),
-                  title: const Text('Safety Data Sheet'),
-                  subtitle: const Text('Click to view SDS document'),
-                  trailing: const Icon(Icons.arrow_forward_ios),
-                  onTap: () {
-                    // SDS viewing functionality coming soon
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text(
-                              'SDS document viewing will be available in future updates')),
-                    );
-                  },
+                child: Column(
+                  children: [
+                    if (chemical.safetyDataSheet != null) ...[
+                      ListTile(
+                        leading:
+                            const Icon(Icons.description, color: Colors.blue),
+                        title: const Text('Safety Data Sheet'),
+                        subtitle: const Text('Click to view SDS document'),
+                        trailing: const Icon(Icons.arrow_forward_ios),
+                        onTap: () {
+                          // SDS viewing functionality coming soon
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'SDS document viewing will be available in future updates')),
+                          );
+                        },
+                      ),
+                    ],
+                    if (chemical.msdsLink != null &&
+                        chemical.msdsLink!.isNotEmpty) ...[
+                      if (chemical.safetyDataSheet != null)
+                        const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.link, color: Colors.green),
+                        title: const Text('MSDS Link'),
+                        subtitle: Text(chemical.msdsLink!),
+                        trailing: const Icon(Icons.open_in_new),
+                        onTap: () async {
+                          final url = chemical.msdsLink!;
+                          if (await canLaunchUrl(Uri.parse(url))) {
+                            await launchUrl(Uri.parse(url),
+                                mode: LaunchMode.externalApplication);
+                          } else {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Could not open the link')),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
@@ -144,6 +317,32 @@ class ChemicalDetailsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  bool _hasPhysicalProperties() {
+    return (chemical.molecularFormula != null &&
+            chemical.molecularFormula!.isNotEmpty) ||
+        chemical.molecularWeight != null ||
+        (chemical.phicalState != null && chemical.phicalState!.isNotEmpty) ||
+        (chemical.color != null && chemical.color!.isNotEmpty) ||
+        chemical.density != null ||
+        (chemical.meltingPoint != null && chemical.meltingPoint!.isNotEmpty) ||
+        (chemical.boilingPoint != null && chemical.boilingPoint!.isNotEmpty) ||
+        (chemical.solubility != null && chemical.solubility!.isNotEmpty);
+  }
+
+  bool _hasStorageSafetyInfo() {
+    return (chemical.storageConditions != null &&
+            chemical.storageConditions!.isNotEmpty) ||
+        (chemical.hazardClass != null && chemical.hazardClass!.isNotEmpty) ||
+        (chemical.safetyPrecautions != null &&
+            chemical.safetyPrecautions!.isNotEmpty) ||
+        (chemical.safetyInfo != null && chemical.safetyInfo!.isNotEmpty);
+  }
+
+  bool _hasDocuments() {
+    return chemical.safetyDataSheet != null ||
+        (chemical.msdsLink != null && chemical.msdsLink!.isNotEmpty);
   }
 
   Widget _buildDetailRow(String label, String value) {
@@ -165,6 +364,38 @@ class ChemicalDetailsScreen extends StatelessWidget {
             value,
             style: TextStyle(
               color: Colors.grey[600],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailSection(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$label:',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: Text(
+            value,
+            style: TextStyle(
+              color: Colors.grey[600],
+              height: 1.4,
             ),
           ),
         ),

@@ -264,9 +264,49 @@ router.get('/live-chat/conversations', authenticateToken, async (req, res) => {
       port: process.env.DB_PORT,
     });
 
-    let conversationsQuery, unreadQuery, values;
+    let conversationsQuery, values, unreadCondition;
+
+    // Determine unread condition based on viewer role
     if (userRole === 'admin' || userRole === 'technician') {
-      // Admin/technician sees all conversations with unread counts from all users
+      unreadCondition = "cm.sender_type != 'admin' AND cm.sender_type != 'technician'";
+    } else {
+      unreadCondition = "cm.sender_type != 'user'";
+    }
+
+    if (userRole === 'admin') {
+      // Admin sees ALL conversations: admin-borrower, admin-technician, technician-borrower
+      conversationsQuery = `
+        SELECT cc.*,
+               COALESCE(unread_count, 0) as unread_count,
+               u.name as other_user_name,
+               u.role as other_user_role,
+               CASE
+                 WHEN cc.user_id = $1 THEN 'user'
+                 WHEN cc.admin_id = $1 THEN 'admin'
+                 ELSE 'technician'
+               END as viewer_role_in_chat
+        FROM chat_conversations cc
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) as unread_count
+          FROM chat_messages cm
+          WHERE cm.conversation_id = cc.id
+            AND cm.is_read = false
+            AND (${unreadCondition})
+        ) unread ON true
+        LEFT JOIN users u ON (
+          CASE
+            WHEN cc.user_id != $1 AND cc.user_id != cc.admin_id THEN cc.user_id
+            WHEN cc.admin_id != $1 AND cc.admin_id != cc.user_id THEN cc.admin_id
+            ELSE NULL
+          END = u.id
+        )
+        WHERE cc.conversation_type = $2
+          AND cc.deleted_at IS NULL
+        ORDER BY cc.updated_at DESC
+      `;
+      values = [userId, 'live'];
+    } else if (userRole === 'technician') {
+      // Technician sees ONLY technician-borrower conversations (exclude admin-borrower and admin-technician)
       conversationsQuery = `
         SELECT cc.*,
                COALESCE(unread_count, 0) as unread_count,
@@ -277,9 +317,8 @@ router.get('/live-chat/conversations', authenticateToken, async (req, res) => {
           SELECT COUNT(*) as unread_count
           FROM chat_messages cm
           WHERE cm.conversation_id = cc.id
-            AND cm.sender_type != 'admin'
-            AND cm.sender_type != 'technician'
             AND cm.is_read = false
+            AND (${unreadCondition})
         ) unread ON true
         LEFT JOIN users u ON (
           CASE
@@ -289,25 +328,36 @@ router.get('/live-chat/conversations', authenticateToken, async (req, res) => {
         )
         WHERE cc.conversation_type = $2
           AND cc.deleted_at IS NULL
+          -- Technician privacy rules: only show technician-borrower conversations
+          AND cc.admin_id = $1  -- This technician is involved
+          AND cc.user_id IS NOT NULL  -- It's a borrower conversation
         ORDER BY cc.updated_at DESC
       `;
       values = [userId, 'live'];
     } else {
-      // User sees only their conversations with their unread counts
+      // Borrower sees only their own conversations with admin or technician
       conversationsQuery = `
         SELECT cc.*,
-               COALESCE(unread_count, 0) as unread_count
+               COALESCE(unread_count, 0) as unread_count,
+               CASE
+                 WHEN cc.admin_id IS NOT NULL THEN 'Admin/Technician'
+                 ELSE 'Staff'
+               END as other_user_name,
+               CASE
+                 WHEN cc.admin_id IS NOT NULL THEN 'staff'
+                 ELSE 'staff'
+               END as other_user_role
         FROM chat_conversations cc
         LEFT JOIN LATERAL (
           SELECT COUNT(*) as unread_count
           FROM chat_messages cm
           WHERE cm.conversation_id = cc.id
-            AND cm.sender_type != 'user'
             AND cm.is_read = false
+            AND (${unreadCondition})
         ) unread ON true
-        WHERE cc.user_id = $1
-          AND cc.conversation_type = $2
+        WHERE cc.conversation_type = $2
           AND cc.deleted_at IS NULL
+          AND (cc.user_id = $1 OR cc.admin_id = $1)  -- Borrower can see their own conversations
         ORDER BY cc.updated_at DESC
       `;
       values = [userId, 'live'];
@@ -766,6 +816,7 @@ router.get('/live-chat/unread-count', authenticateToken, async (req, res) => {
 
 router.get('/live-chat/users', authenticateToken, async (req, res) => {
   try {
+    const userId = req.user.id;
     const userRole = req.user.role;
     
     // Only allow admin and technician to load users for live chat
@@ -785,29 +836,102 @@ router.get('/live-chat/users', authenticateToken, async (req, res) => {
       port: process.env.DB_PORT,
     });
 
-    // Load users who can be chatted with (regular users/students, excluding staff)
-    const usersResult = await pool.query(
-      `SELECT id, name, email, role, created_at
-       FROM users
-       WHERE role = 'user'
-         AND deleted_at IS NULL
-       ORDER BY name ASC`,
-      []
-    );
+    // Load users with conversation status for the current staff member
+    const usersWithStatusQuery = `
+      SELECT
+        u.id,
+        u.name,
+        u.email,
+        u.role,
+        u.created_at,
+        cc.id as conversation_id,
+        cc.title,
+        cc.status as conversation_status,
+        cc.updated_at as last_activity,
+        COALESCE(unread_count, 0) as unread_messages,
+        CASE
+          WHEN cc.id IS NOT NULL AND cc.status = 'active' THEN 'in_progress'
+          WHEN cc.id IS NOT NULL AND cc.status = 'ended' THEN 'closed'
+          WHEN cc.id IS NOT NULL AND cc.deleted_at IS NOT NULL THEN 'deleted'
+          ELSE 'available'
+        END as chat_status
+      FROM users u
+      LEFT JOIN chat_conversations cc ON (
+        (cc.user_id = u.id AND cc.admin_id = $1)
+        OR (cc.user_id = $1 AND cc.admin_id = u.id)
+      ) AND cc.conversation_type = 'live' AND cc.deleted_at IS NULL
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*) as unread_count
+        FROM chat_messages cm
+        WHERE cm.conversation_id = cc.id
+          AND cm.is_read = false
+          AND cm.sender_type != CASE
+            WHEN $2 = 'admin' THEN 'admin'
+            WHEN $2 = 'technician' THEN 'technician'
+            ELSE 'user'
+          END
+      ) unread ON true
+      WHERE u.role = 'user'
+        AND u.deleted_at IS NULL
+        AND u.id != $1  -- Exclude the current staff member
+      ORDER BY
+        CASE
+          WHEN cc.updated_at IS NOT NULL THEN 0
+          ELSE 1
+        END,
+        cc.updated_at DESC NULLS LAST,
+        u.name ASC
+    `;
 
-    // Sanitize and return users
-    const sanitizedUsers = usersResult.rows.map(user => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      created_at: user.created_at
-    }));
+    const usersResult = await pool.query(usersWithStatusQuery, [userId, userRole]);
+
+    // Group and process results
+    const userMap = {};
+    usersResult.rows.forEach(row => {
+      if (!userMap[row.id]) {
+        userMap[row.id] = {
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          role: row.role,
+          created_at: row.created_at,
+          chat_status: row.chat_status,
+          conversation: null,
+          unread_messages: 0,
+          last_activity: null
+        };
+      }
+      
+      // Update with conversation info if exists
+      if (row.conversation_id) {
+        userMap[row.id].conversation = {
+          id: row.conversation_id,
+          title: row.title,
+          status: row.conversation_status,
+          updated_at: row.updated_at
+        };
+        userMap[row.id].unread_messages = row.unread_messages;
+        userMap[row.id].last_activity = row.updated_at;
+      }
+    });
+
+    const usersList = Object.values(userMap);
+
+    // Separate users by chat status for easier frontend handling
+    const availableUsers = usersList.filter(u => u.chat_status === 'available');
+    const activeChats = usersList.filter(u => u.chat_status === 'in_progress');
+    const closedChats = usersList.filter(u => u.chat_status === 'closed');
 
     res.json({
       success: true,
-      users: sanitizedUsers,
-      count: sanitizedUsers.length
+      users: usersList,
+      count: usersList.length,
+      available_users: availableUsers.length,
+      active_chats: activeChats.length,
+      closed_chats: closedChats.length,
+      // Include conversation summaries for quick access
+      active_chats_summary: activeChats,
+      available_users_summary: availableUsers.slice(0, 10) // First 10 available users
     });
   } catch (error) {
     console.error('Load live chat users error:', error);

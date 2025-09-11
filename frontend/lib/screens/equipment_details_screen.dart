@@ -143,15 +143,34 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
                               fontSize: 16,
                             ),
                           ),
+                          if (equipment.serialNumber != null &&
+                              equipment.serialNumber!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                'S/N: ${equipment.serialNumber}',
+                                style: TextStyle(
+                                  color: Colors.green[700],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  // Details Section
+                  // Basic Details Section
                   Text(
-                    'Equipment Details',
+                    'Basic Information',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 16),
@@ -168,7 +187,81 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
                           _buildDetailRow('Condition', equipment.condition),
                           const SizedBox(height: 12),
                           _buildDetailRow('Location', equipment.location),
-                          const SizedBox(height: 12),
+                          if (equipment.serialNumber != null &&
+                              equipment.serialNumber!.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            _buildDetailRow(
+                                'Serial Number', equipment.serialNumber!),
+                          ],
+                          if (equipment.manufacturer != null &&
+                              equipment.manufacturer!.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            _buildDetailRow(
+                                'Manufacturer', equipment.manufacturer!),
+                          ],
+                          if (equipment.model != null &&
+                              equipment.model!.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            _buildDetailRow('Model', equipment.model!),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Purchase & Warranty Section
+                  if (_hasPurchaseWarrantyInfo()) ...[
+                    Text(
+                      'Purchase & Warranty',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            if (equipment.purchaseDate != null) ...[
+                              _buildDetailRow(
+                                  'Purchase Date',
+                                  DateFormat('MMM dd, yyyy')
+                                      .format(equipment.purchaseDate!)),
+                              const SizedBox(height: 12),
+                            ],
+                            if (equipment.warrantyExpiry != null) ...[
+                              _buildDetailRow(
+                                  'Warranty Expiry',
+                                  DateFormat('MMM dd, yyyy')
+                                      .format(equipment.warrantyExpiry!)),
+                              const SizedBox(height: 12),
+                              _buildWarrantyStatus(equipment.warrantyExpiry!),
+                            ],
+                          ]..removeWhere((widget) =>
+                              widget == const SizedBox(height: 12) &&
+                              widget ==
+                                  (Column(children: []).children.isNotEmpty
+                                      ? (Column(children: []).children.last)
+                                      : null)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Maintenance Section
+                  Text(
+                    'Maintenance',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
                           _buildDetailRow(
                             'Last Maintenance',
                             DateFormat('MMM dd, yyyy')
@@ -188,15 +281,58 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
                             'Maintenance Schedule',
                             '${equipment.maintenanceSchedule} days',
                           ),
+                          const SizedBox(height: 16),
+                          _buildMaintenanceStatus(equipment),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
 
+                  // Calibration Section
+                  if (_hasCalibrationInfo()) ...[
+                    Text(
+                      'Calibration',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            if (equipment.calibrationDate != null) ...[
+                              _buildDetailRow(
+                                  'Last Calibration',
+                                  DateFormat('MMM dd, yyyy')
+                                      .format(equipment.calibrationDate!)),
+                              const SizedBox(height: 12),
+                            ],
+                            if (equipment.nextCalibrationDate != null) ...[
+                              _buildDetailRow(
+                                  'Next Calibration',
+                                  DateFormat('MMM dd, yyyy')
+                                      .format(equipment.nextCalibrationDate!)),
+                              const SizedBox(height: 12),
+                              _buildCalibrationStatus(
+                                  equipment.nextCalibrationDate!),
+                            ],
+                          ]..removeWhere((widget) =>
+                              widget == const SizedBox(height: 12) &&
+                              widget ==
+                                  (Column(children: []).children.isNotEmpty
+                                      ? (Column(children: []).children.last)
+                                      : null)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
                   // Status Section
                   Text(
-                    'Status',
+                    'Status Overview',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 16),
@@ -204,12 +340,18 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
                     elevation: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
-                      child: Column(
+                      child: Wrap(
+                        spacing: 12.0,
+                        runSpacing: 12.0,
                         children: [
                           _buildStatusChip('Condition', equipment.condition,
                               _getConditionColor(equipment.condition)),
-                          const SizedBox(height: 12),
-                          _buildMaintenanceStatus(equipment),
+                          _buildMaintenanceStatusChip(equipment),
+                          if (equipment.nextCalibrationDate != null)
+                            _buildCalibrationStatusChip(
+                                equipment.nextCalibrationDate!),
+                          if (equipment.warrantyExpiry != null)
+                            _buildWarrantyStatusChip(equipment.warrantyExpiry!),
                         ],
                       ),
                     ),
@@ -218,6 +360,16 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
               ),
             ),
     );
+  }
+
+  bool _hasPurchaseWarrantyInfo() {
+    return widget.equipment.purchaseDate != null ||
+        widget.equipment.warrantyExpiry != null;
+  }
+
+  bool _hasCalibrationInfo() {
+    return widget.equipment.calibrationDate != null ||
+        widget.equipment.nextCalibrationDate != null;
   }
 
   Widget _buildDetailRow(String label, String value) {
@@ -247,25 +399,14 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
   }
 
   Widget _buildStatusChip(String label, String value, Color color) {
-    return Row(
-      children: [
-        Text(
-          '$label:',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[700],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Chip(
-          label: Text(value.toUpperCase()),
-          backgroundColor: color.withValues(alpha: 0.2),
-          labelStyle: TextStyle(
-            color: color,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
+    return Chip(
+      label: Text('$label: ${value.toUpperCase()}'),
+      backgroundColor: color.withValues(alpha: 0.2),
+      labelStyle: TextStyle(
+        color: color,
+        fontWeight: FontWeight.bold,
+        fontSize: 12,
+      ),
     );
   }
 
@@ -281,13 +422,13 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
 
     if (daysUntilMaintenance < 0) {
       statusColor = Colors.red;
-      statusText = 'OVERDUE';
+      statusText = 'OVERDUE (${-daysUntilMaintenance} days)';
     } else if (daysUntilMaintenance < 30) {
       statusColor = Colors.orange;
-      statusText = 'DUE SOON';
+      statusText = 'DUE SOON ($daysUntilMaintenance days)';
     } else {
       statusColor = Colors.green;
-      statusText = 'UP TO DATE';
+      statusText = 'UP TO DATE ($daysUntilMaintenance days)';
     }
 
     return Row(
@@ -300,15 +441,189 @@ class _EquipmentDetailsScreenState extends State<EquipmentDetailsScreen> {
           ),
         ),
         const SizedBox(width: 8),
-        Chip(
-          label: Text(statusText),
-          backgroundColor: statusColor.withValues(alpha: 0.2),
-          labelStyle: TextStyle(
-            color: statusColor,
-            fontWeight: FontWeight.bold,
+        Expanded(
+          child: Chip(
+            label: Text(statusText),
+            backgroundColor: statusColor.withValues(alpha: 0.2),
+            labelStyle: TextStyle(
+              color: statusColor,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMaintenanceStatusChip(Equipment equipment) {
+    final nextMaintenance = equipment.lastMaintenanceDate.add(
+      Duration(days: equipment.maintenanceSchedule),
+    );
+    final daysUntilMaintenance =
+        nextMaintenance.difference(DateTime.now()).inDays;
+
+    Color statusColor;
+    String statusText;
+
+    if (daysUntilMaintenance < 0) {
+      statusColor = Colors.red;
+      statusText = 'MAINTENANCE OVERDUE';
+    } else if (daysUntilMaintenance < 30) {
+      statusColor = Colors.orange;
+      statusText = 'MAINTENANCE DUE SOON';
+    } else {
+      statusColor = Colors.green;
+      statusText = 'MAINTENANCE UP TO DATE';
+    }
+
+    return Chip(
+      label: Text(statusText),
+      backgroundColor: statusColor.withValues(alpha: 0.2),
+      labelStyle: TextStyle(
+        color: statusColor,
+        fontWeight: FontWeight.bold,
+        fontSize: 12,
+      ),
+    );
+  }
+
+  Widget _buildCalibrationStatus(DateTime nextCalibrationDate) {
+    final daysUntilCalibration =
+        nextCalibrationDate.difference(DateTime.now()).inDays;
+
+    Color statusColor;
+    String statusText;
+
+    if (daysUntilCalibration < 0) {
+      statusColor = Colors.red;
+      statusText = 'OVERDUE (${-daysUntilCalibration} days)';
+    } else if (daysUntilCalibration < 30) {
+      statusColor = Colors.orange;
+      statusText = 'DUE SOON ($daysUntilCalibration days)';
+    } else {
+      statusColor = Colors.green;
+      statusText = 'UP TO DATE ($daysUntilCalibration days)';
+    }
+
+    return Row(
+      children: [
+        Text(
+          'Calibration Status:',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Chip(
+            label: Text(statusText),
+            backgroundColor: statusColor.withValues(alpha: 0.2),
+            labelStyle: TextStyle(
+              color: statusColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalibrationStatusChip(DateTime nextCalibrationDate) {
+    final daysUntilCalibration =
+        nextCalibrationDate.difference(DateTime.now()).inDays;
+
+    Color statusColor;
+    String statusText;
+
+    if (daysUntilCalibration < 0) {
+      statusColor = Colors.red;
+      statusText = 'CALIBRATION OVERDUE';
+    } else if (daysUntilCalibration < 30) {
+      statusColor = Colors.orange;
+      statusText = 'CALIBRATION DUE SOON';
+    } else {
+      statusColor = Colors.green;
+      statusText = 'CALIBRATION UP TO DATE';
+    }
+
+    return Chip(
+      label: Text(statusText),
+      backgroundColor: statusColor.withValues(alpha: 0.2),
+      labelStyle: TextStyle(
+        color: statusColor,
+        fontWeight: FontWeight.bold,
+        fontSize: 12,
+      ),
+    );
+  }
+
+  Widget _buildWarrantyStatus(DateTime warrantyExpiry) {
+    final daysUntilExpiry = warrantyExpiry.difference(DateTime.now()).inDays;
+
+    Color statusColor;
+    String statusText;
+
+    if (daysUntilExpiry < 0) {
+      statusColor = Colors.red;
+      statusText = 'EXPIRED (${-daysUntilExpiry} days ago)';
+    } else if (daysUntilExpiry < 90) {
+      statusColor = Colors.orange;
+      statusText = 'EXPIRING SOON ($daysUntilExpiry days)';
+    } else {
+      statusColor = Colors.green;
+      statusText = 'VALID ($daysUntilExpiry days)';
+    }
+
+    return Row(
+      children: [
+        Text(
+          'Warranty Status:',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Chip(
+            label: Text(statusText),
+            backgroundColor: statusColor.withValues(alpha: 0.2),
+            labelStyle: TextStyle(
+              color: statusColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWarrantyStatusChip(DateTime warrantyExpiry) {
+    final daysUntilExpiry = warrantyExpiry.difference(DateTime.now()).inDays;
+
+    Color statusColor;
+    String statusText;
+
+    if (daysUntilExpiry < 0) {
+      statusColor = Colors.red;
+      statusText = 'WARRANTY EXPIRED';
+    } else if (daysUntilExpiry < 90) {
+      statusColor = Colors.orange;
+      statusText = 'WARRANTY EXPIRING SOON';
+    } else {
+      statusColor = Colors.green;
+      statusText = 'WARRANTY VALID';
+    }
+
+    return Chip(
+      label: Text(statusText),
+      backgroundColor: statusColor.withValues(alpha: 0.2),
+      labelStyle: TextStyle(
+        color: statusColor,
+        fontWeight: FontWeight.bold,
+        fontSize: 12,
+      ),
     );
   }
 

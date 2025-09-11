@@ -4,27 +4,49 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all users (admin only)
-router.get('/', authenticateToken, requireAdmin, async (req, res) => {
+// Get users for chat - technicians see borrowers, admins see all
+router.get('/', authenticateToken, async (req, res) => {
   try {
-    console.log('=== USERS ROUTE: GET ALL USERS ===');
+    console.log('=== USERS ROUTE: GET USERS FOR CHAT ===');
     console.log('User making request:', req.user);
     
-    const users = await User.findAll();
-    console.log(`Found ${users.length} users`);
+    let users;
+    if (req.user.role === 'admin') {
+      // Admins see all users
+      users = await User.findAll();
+      console.log(`Admin found ${users.length} total users`);
+    } else if (req.user.role === 'technician') {
+      // Technicians see only active borrowers
+      const result = await db.query(`
+        SELECT
+          id, name, email, role, status, phone, student_id,
+          institution, education_level, semester, department,
+          created_at
+        FROM users
+        WHERE role = 'borrower' AND status = 'active'
+        ORDER BY created_at DESC
+      `);
+      users = result.rows;
+      console.log(`Technician found ${users.length} active borrowers`);
+    } else {
+      return res.status(403).json({ error: 'Permission denied' });
+    }
     
-    // Return only necessary user information
+    // Return only necessary user information for chat
     const sanitizedUsers = users.map(user => ({
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
+      phone: user.phone,
+      student_id: user.student_id,
+      institution: user.institution,
       created_at: user.created_at
     }));
     
     res.json(sanitizedUsers);
   } catch (error) {
-    console.error('Error in Users.findAll:', error);
+    console.error('Error in Users.getForChat:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -803,7 +803,25 @@ class ApiService {
   }
 
   // ✅ CHATBOT METHODS - Fixed and properly integrated
-  static Future<Map<String, dynamic>> sendChatMessage(
+
+  static Future<List<dynamic>> getChatQuickActions(String userRole) async {
+    final token = await getAuthToken();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/chat/quick-actions/$userRole'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['actions'];
+    } else {
+      throw Exception('Failed to load quick actions');
+    }
+  }
+
+  // ✅ CHATBOT SEND MESSAGE METHOD - For chatbot functionality
+  static Future<Map<String, dynamic>> sendChatbotMessage(
       String message, int userId, String userRole) async {
     final token = await getAuthToken();
 
@@ -821,22 +839,6 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       throw Exception('Failed to send chat message');
-    }
-  }
-
-  static Future<List<dynamic>> getChatQuickActions(String userRole) async {
-    final token = await getAuthToken();
-
-    final response = await http.get(
-      Uri.parse('$baseUrl/chat/quick-actions/$userRole'),
-      headers: getHeaders(token),
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['actions'];
-    } else {
-      throw Exception('Failed to load quick actions');
     }
   }
 
@@ -961,6 +963,128 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       throw Exception('Failed to delete live chat message: ${response.body}');
+    }
+  }
+
+  // New: Get chat conversations for authenticated user
+  static Future<List<dynamic>> getChatConversations() async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    logger.d('=== API SERVICE GET CHAT CONVERSATIONS ===');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/chat/conversations'),
+      headers: getHeaders(token),
+    );
+
+    logger.d('Get conversations response status: ${response.statusCode}');
+    logger.d('Get conversations response body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      logger.d('Chat conversations loaded: ${data.length} conversations');
+      return data;
+    } else {
+      logger.e('Failed to get chat conversations: ${response.body}');
+      throw Exception('Failed to load chat conversations: ${response.body}');
+    }
+  }
+
+  // New: Get messages for a specific conversation
+  static Future<List<dynamic>> getChatMessages(int conversationId) async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    logger.d('=== API SERVICE GET CHAT MESSAGES ===');
+    logger.d('Conversation ID: $conversationId');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/chat/conversations/$conversationId/messages'),
+      headers: getHeaders(token),
+    );
+
+    logger.d('Get messages response status: ${response.statusCode}');
+    logger.d('Get messages response body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      logger.d('Chat messages loaded: ${data.length} messages');
+      return data;
+    } else {
+      logger.e('Failed to get chat messages: ${response.body}');
+      throw Exception('Failed to load chat messages: ${response.body}');
+    }
+  }
+
+  // New: Send message in a chat conversation (1:1 chat, not chatbot)
+  static Future<Map<String, dynamic>> sendChatMessage(
+      int conversationId, String message) async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    logger.d('=== API SERVICE SEND CHAT MESSAGE ===');
+    logger.d('Conversation ID: $conversationId');
+    logger.d('Message: $message');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/chat/conversations/$conversationId/messages'),
+      headers: getHeaders(token),
+      body: jsonEncode({
+        'message': message,
+        'messageType': 'text',
+      }),
+    );
+
+    logger.d('Send message response status: ${response.statusCode}');
+    logger.d('Send message response body: ${response.body}');
+
+    if (response.statusCode == 201) {
+      final data = jsonDecode(response.body);
+      logger.d('Chat message sent successfully: ${data['id']}');
+      return data;
+    } else {
+      logger.e('Failed to send chat message: ${response.body}');
+      throw Exception('Failed to send chat message: ${response.body}');
+    }
+  }
+
+  // New: Create chat conversation between technician and borrower
+  static Future<Map<String, dynamic>> createChatConversation(
+      int targetUserId) async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    logger.d('=== API SERVICE CREATE CHAT CONVERSATION ===');
+    logger.d('Target user ID: $targetUserId');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/chat/conversations'),
+      headers: getHeaders(token),
+      body: jsonEncode({
+        'targetUserId': targetUserId,
+      }),
+    );
+
+    logger.d('Create conversation response status: ${response.statusCode}');
+    logger.d('Create conversation response body: ${response.body}');
+
+    if (response.statusCode == 201) {
+      final data = jsonDecode(response.body);
+      logger.d(
+          'Chat conversation created successfully: ${data['conversation']['id']}');
+      return data;
+    } else {
+      logger.e('Failed to create chat conversation: ${response.body}');
+      throw Exception('Failed to create chat conversation: ${response.body}');
     }
   }
 }

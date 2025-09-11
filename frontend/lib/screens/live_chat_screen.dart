@@ -17,19 +17,23 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
   final TextEditingController _titleController = TextEditingController();
 
   List<User> _users = [];
+  List<User> _borrowers = []; // New: List of borrowers for technicians
   bool _isLoadingUsers = false;
+  bool _isLoadingBorrowers = false; // New: Loading state for borrowers
   List<dynamic> _conversations = [];
   Map<String, dynamic>? _selectedConversation;
   List<dynamic> _messages = [];
   bool _isLoading = true;
   bool _isSending = false;
   bool _showStartChat = false;
+  bool _showBorrowerList = false; // New: Show borrower list for technicians
 
   @override
   void initState() {
     super.initState();
     _loadConversations();
     _loadUsers();
+    _loadBorrowers(); // New: Load borrowers for technicians
   }
 
   Future<void> _loadUsers() async {
@@ -51,9 +55,37 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
     }
   }
 
+  // New: Load active borrowers for technicians
+  Future<void> _loadBorrowers() async {
+    final userRole = Provider.of<AuthProvider>(context, listen: false).userRole;
+    if (userRole != 'technician') return;
+
+    if (!mounted) return;
+    setState(() => _isLoadingBorrowers = true);
+    try {
+      // Call the new backend endpoint for active borrowers
+      final List<User> borrowersData = await ApiService.getUsers();
+      final List<User> borrowers =
+          borrowersData.where((user) => user.role == 'borrower').toList();
+
+      setState(() {
+        _borrowers = borrowers;
+        _isLoadingBorrowers = false;
+      });
+    } catch (error) {
+      setState(() => _isLoadingBorrowers = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load borrowers: $error')),
+        );
+      }
+    }
+  }
+
   Future<void> _loadConversations() async {
     try {
-      final conversations = await ApiService.getLiveChatConversations();
+      // Use new chat conversations endpoint
+      final conversations = await ApiService.getChatConversations();
       setState(() {
         _conversations = conversations;
         _isLoading = false;
@@ -70,36 +102,94 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
   }
 
   Future<void> _startNewChat() async {
-    if (_userIdController.text.isEmpty) {
+    final userRole = Provider.of<AuthProvider>(context, listen: false).userRole;
+
+    if (userRole == 'technician' && _borrowers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a user ID')),
+        const SnackBar(content: Text('No borrowers available to chat with')),
       );
       return;
     }
 
-    try {
-      final result = await ApiService.startLiveChat(
-        int.parse(_userIdController.text),
-        title: _titleController.text.isNotEmpty ? _titleController.text : null,
+    if (userRole == 'technician') {
+      // For technicians, select from borrower list
+      final selectedBorrower = _borrowers.firstWhere(
+        (borrower) => borrower.id == int.parse(_userIdController.text),
+        orElse: () => User(
+            id: 0,
+            name: '',
+            email: '',
+            role: 'borrower',
+            createdAt: DateTime.now()),
       );
 
-      _userIdController.clear();
-      _titleController.clear();
-      setState(() {
-        _showStartChat = false;
-      });
+      if (selectedBorrower.id == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a valid borrower')),
+        );
+        return;
+      }
 
-      // Load the new conversation
-      await _loadConversations();
-      _selectConversation(result['conversation']);
+      try {
+        // Use the new chat API endpoint
+        final result =
+            await ApiService.createChatConversation(selectedBorrower.id);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Live chat started successfully')),
-      );
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to start chat: $error')),
-      );
+        _userIdController.clear();
+        _titleController.clear();
+        setState(() {
+          _showStartChat = false;
+          _showBorrowerList = false;
+        });
+
+        // Load the new conversation
+        await _loadConversations();
+        _selectConversation(result['conversation']);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  'Chat started successfully with ${selectedBorrower.name}')),
+        );
+      } catch (error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start chat: $error')),
+        );
+      }
+    } else {
+      // Original logic for admins
+      if (_userIdController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a user ID')),
+        );
+        return;
+      }
+
+      try {
+        final result = await ApiService.startLiveChat(
+          int.parse(_userIdController.text),
+          title:
+              _titleController.text.isNotEmpty ? _titleController.text : null,
+        );
+
+        _userIdController.clear();
+        _titleController.clear();
+        setState(() {
+          _showStartChat = false;
+        });
+
+        // Load the new conversation
+        await _loadConversations();
+        _selectConversation(result['conversation']);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Live chat started successfully')),
+        );
+      } catch (error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to start chat: $error')),
+        );
+      }
     }
   }
 
@@ -110,9 +200,10 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
     });
 
     try {
-      final result = await ApiService.getLiveChatMessages(conversation['id']);
+      // Use new chat messages endpoint
+      final messages = await ApiService.getChatMessages(conversation['id']);
       setState(() {
-        _messages = result['messages'];
+        _messages = messages;
       });
     } catch (error) {
       if (!mounted) return;
@@ -132,14 +223,18 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
     setState(() => _isSending = true);
 
     try {
-      await ApiService.sendLiveChatMessage(
-          _selectedConversation!['id'], message);
+      // Use new chat message endpoint
+      if (_selectedConversation?['id'] != null) {
+        await ApiService.sendChatMessage(_selectedConversation!['id'], message);
+      } else {
+        throw Exception('Invalid conversation ID');
+      }
 
       // Reload messages
-      final result =
-          await ApiService.getLiveChatMessages(_selectedConversation!['id']);
+      final messages =
+          await ApiService.getChatMessages(_selectedConversation!['id']);
       setState(() {
-        _messages = result['messages'];
+        _messages = messages;
       });
     } catch (error) {
       if (!mounted) return;
@@ -206,23 +301,129 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Live Chat Support'),
+        title: Text(
+            userRole == 'technician' ? 'Technician Chat' : 'Live Chat Support'),
         backgroundColor: Colors.blue,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              _loadConversations();
+              if (userRole == 'technician') {
+                _loadBorrowers();
+              }
+            },
+            tooltip: 'Refresh',
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () {
               setState(() {
-                _showStartChat = !_showStartChat;
+                if (userRole == 'technician') {
+                  _showBorrowerList = true;
+                  _showStartChat = false;
+                } else {
+                  _showStartChat = !_showStartChat;
+                }
               });
             },
-            tooltip: 'Start New Chat',
+            tooltip: userRole == 'technician'
+                ? 'Start Chat with Borrower'
+                : 'Start New Chat',
           ),
         ],
       ),
       body: Column(
         children: [
-          // Start new chat form
+          // New: Borrower list for technicians
+          if (userRole == 'technician' && _showBorrowerList) ...[
+            Container(
+              height: 400,
+              margin: const EdgeInsets.all(16),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Select Borrower to Chat With',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _showBorrowerList = false;
+                              });
+                            },
+                            child: const Text('Cancel'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: _isLoadingBorrowers
+                            ? const Center(child: CircularProgressIndicator())
+                            : _borrowers.isEmpty
+                                ? const Center(
+                                    child:
+                                        Text('No active borrowers available'),
+                                  )
+                                : ListView.builder(
+                                    itemCount: _borrowers.length,
+                                    itemBuilder: (context, index) {
+                                      final borrower = _borrowers[index];
+                                      return ListTile(
+                                        leading: CircleAvatar(
+                                          child: Text(borrower.name.isNotEmpty
+                                              ? borrower.name[0].toUpperCase()
+                                              : '?'),
+                                        ),
+                                        title: Text(borrower.name),
+                                        subtitle: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(borrower.email),
+                                            if (borrower.studentId != null)
+                                              Text('ID: ${borrower.studentId}'),
+                                            if (borrower.institution != null)
+                                              Text(borrower.institution!),
+                                          ],
+                                        ),
+                                        trailing: ElevatedButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              _userIdController.text =
+                                                  borrower.id.toString();
+                                              _showBorrowerList = false;
+                                              _showStartChat = true;
+                                            });
+                                          },
+                                          child: const Text('Start Chat'),
+                                        ),
+                                        onTap: () {
+                                          setState(() {
+                                            _userIdController.text =
+                                                borrower.id.toString();
+                                            _showBorrowerList = false;
+                                            _showStartChat = true;
+                                          });
+                                        },
+                                      );
+                                    },
+                                  ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+          // Start new chat form (for admins or technicians after borrower selection)
           if (_showStartChat) ...[
             Card(
               margin: const EdgeInsets.all(16),
@@ -232,16 +433,18 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Start New Live Chat',
+                      userRole == 'technician'
+                          ? 'Start Chat with Selected Borrower'
+                          : 'Start New Live Chat',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 16),
-                    if (_isLoadingUsers)
+                    if (userRole != 'technician' && _isLoadingUsers)
                       const Padding(
                         padding: EdgeInsets.all(16),
                         child: Center(child: CircularProgressIndicator()),
                       )
-                    else ...[
+                    else if (userRole != 'technician') ...[
                       DropdownButtonFormField<int>(
                         value: null,
                         decoration: const InputDecoration(
@@ -276,6 +479,15 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                         ),
                         textAlign: TextAlign.start,
                       ),
+                    ] else ...[
+                      TextField(
+                        controller: _userIdController,
+                        readOnly: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Selected Borrower ID',
+                          hintText: 'ID will be filled from borrower selection',
+                        ),
+                      ),
                     ],
                     const SizedBox(height: 8),
                     TextField(
@@ -293,6 +505,10 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                           onPressed: () {
                             setState(() {
                               _showStartChat = false;
+                              if (userRole == 'technician') {
+                                _userIdController.clear();
+                                _titleController.clear();
+                              }
                             });
                           },
                           child: const Text('Cancel'),
@@ -309,7 +525,6 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
               ),
             ),
           ],
-
           // Conversations list and chat area
           Expanded(
             child: Row(

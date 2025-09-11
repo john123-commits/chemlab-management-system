@@ -573,9 +573,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       builder: (context) => const ChatBotScreen()),
                 );
               },
-              child: const Icon(Icons.chat_bubble),
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
+              child: const Icon(Icons.chat_bubble),
             ),
           ),
         ],

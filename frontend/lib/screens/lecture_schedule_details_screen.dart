@@ -132,21 +132,19 @@ class _LectureScheduleDetailsScreenState
                   context,
                   MaterialPageRoute(
                     builder: (context) => LectureScheduleFormScreen(
-                      schedule:
-                          schedule.toJson(), // ✅ Keep this as it expects a Map
+                      schedule: schedule.toJson(),
                     ),
                   ),
                 ).then((result) {
                   if (!context.mounted) return;
                   if (result == true && mounted) {
-                    Navigator.pop(context, true); // Refresh parent
+                    Navigator.pop(context, true);
                   }
                 });
               },
             ),
         ],
       ),
-      // ✅ FIX: Wrap body in SingleChildScrollView to prevent RenderFlex overflow
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -245,7 +243,7 @@ class _LectureScheduleDetailsScreenState
               ),
               const SizedBox(height: 24),
 
-              // Required Chemicals - ✅ FIXED SAFETY CHECKS
+              // Required Chemicals
               if (_isValidList(schedule.requiredChemicals)) ...[
                 Text(
                   'Required Chemicals',
@@ -260,7 +258,7 @@ class _LectureScheduleDetailsScreenState
                 const SizedBox(height: 16),
               ],
 
-              // Required Equipment - ✅ FIXED SAFETY CHECKS
+              // Required Equipment
               if (_isValidList(schedule.requiredEquipment)) ...[
                 Text(
                   'Required Equipment',
@@ -317,8 +315,8 @@ class _LectureScheduleDetailsScreenState
                 const SizedBox(height: 16),
               ],
 
-              // Status Update Section (for admin/technician)
-              if (isAdmin || isTechnician) ...[
+              // Status Update Section - FIXED: Only technicians can approve/reject
+              if (isTechnician) ...[
                 if (schedule.status == 'pending') ...[
                   Text(
                     'Update Status',
@@ -368,25 +366,23 @@ class _LectureScheduleDetailsScreenState
                                       : const Text('Reject Request'),
                                 ),
                               ),
-                              if (isTechnician) ...[
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: _isLoading
-                                        ? null
-                                        : () => _updateStatus('confirmed'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 16),
-                                    ),
-                                    child: _isLoading
-                                        ? const CircularProgressIndicator()
-                                        : const Text('Confirm Request'),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () => _updateStatus('confirmed'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 16),
                                   ),
+                                  child: _isLoading
+                                      ? const CircularProgressIndicator()
+                                      : const Text('Confirm Request'),
                                 ),
-                              ],
+                              ),
                             ],
                           ),
                         ],
@@ -449,8 +445,36 @@ class _LectureScheduleDetailsScreenState
                     ),
                   ),
                 ],
+              ] else if (isAdmin) ...[
+                // Admin can only view status, not change it
+                Card(
+                  color: Colors.blue[50],
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Status Information',
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Colors.blue[700],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          schedule.status == 'pending'
+                              ? 'This schedule is awaiting technician approval.'
+                              : 'Current status: ${_getStatusText(schedule.status)}',
+                          style: TextStyle(color: Colors.blue[700]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
-              const SizedBox(height: 20), // ✅ Add extra bottom padding
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -458,14 +482,11 @@ class _LectureScheduleDetailsScreenState
     );
   }
 
-  // ✅ FIXED Helper method to validate if the data is a proper list
   bool _isValidList(dynamic data) {
     return data is List && data.isNotEmpty;
   }
 
-  // ✅ FIXED Helper method to build chemical list with safety checks
   List<Widget> _buildChemicalList(dynamic chemicalsData) {
-    // ✅ Handle case where data might be a String instead of List
     if (chemicalsData is! List) {
       return [
         const ListTile(
@@ -511,9 +532,7 @@ class _LectureScheduleDetailsScreenState
     }).toList();
   }
 
-  // ✅ FIXED Helper method to build equipment list with safety checks
   List<Widget> _buildEquipmentList(dynamic equipmentData) {
-    // ✅ Handle case where data might be a String instead of List
     if (equipmentData is! List) {
       return [
         const ListTile(
