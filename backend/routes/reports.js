@@ -46,7 +46,7 @@ router.get('/monthly', authenticateToken, requireAdminOrTechnician, async (req, 
       console.warn('Could not get overdue borrowings:', error.message);
     }
     
-    // Get counts safely
+    // Get counts safely using proper count methods
     let totalChemicals = 0;
     let totalEquipment = 0;
     let activeBorrowings = 0;
@@ -54,27 +54,141 @@ router.get('/monthly', authenticateToken, requireAdminOrTechnician, async (req, 
     let overdueBorrowingsCount = overdueBorrowings.length;
     
     try {
-      totalChemicals = (await Chemical.findAll()).length;
+      // Use count() method with proper where clause for better performance
+      totalChemicals = await Chemical.count({
+        where: {
+          deleted_at: null  // Exclude soft-deleted records
+        }
+      });
+      console.log('Total chemicals count:', totalChemicals);
     } catch (error) {
       console.warn('Could not get total chemicals count:', error.message);
+      // Fallback to findAll if count fails
+      try {
+        totalChemicals = (await Chemical.findAll({
+          where: { deleted_at: null }
+        })).length;
+      } catch (fallbackError) {
+        console.warn('Fallback chemical count also failed:', fallbackError.message);
+      }
     }
     
     try {
-      totalEquipment = (await Equipment.findAll()).length;
+      // Use count() method with proper where clause for better performance
+      totalEquipment = await Equipment.count({
+        where: {
+          deleted_at: null  // Exclude soft-deleted records
+        }
+      });
+      console.log('Total equipment count:', totalEquipment);
     } catch (error) {
       console.warn('Could not get total equipment count:', error.message);
+      // Fallback to findAll if count fails
+      try {
+        totalEquipment = (await Equipment.findAll({
+          where: { deleted_at: null }
+        })).length;
+      } catch (fallbackError) {
+        console.warn('Fallback equipment count also failed:', fallbackError.message);
+      }
     }
     
     try {
-      activeBorrowings = (await Borrowing.findAll({ status: 'approved' })).length;
+      // Use count() method with proper where clause
+      activeBorrowings = await Borrowing.count({
+        where: {
+          status: 'approved',
+          deleted_at: null
+        }
+      });
+      console.log('Active borrowings count:', activeBorrowings);
     } catch (error) {
       console.warn('Could not get active borrowings count:', error.message);
+      // Fallback to findAll if count fails
+      try {
+        activeBorrowings = (await Borrowing.findAll({
+          where: { 
+            status: 'approved',
+            deleted_at: null 
+          }
+        })).length;
+      } catch (fallbackError) {
+        console.warn('Fallback active borrowings count also failed:', fallbackError.message);
+      }
     }
     
     try {
-      pendingBorrowings = (await Borrowing.findAll({ status: 'pending' })).length;
+      // DEBUG: Check what status values actually exist in your database
+      const allBorrowings = await Borrowing.findAll({
+        attributes: ['status'],
+        where: { deleted_at: null },
+        raw: true
+      });
+      
+      const statusCounts = {};
+      allBorrowings.forEach(borrowing => {
+        const status = borrowing.status;
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
+      
+      console.log('=== BORROWING STATUS DEBUG ===');
+      console.log('All borrowing statuses in database:', statusCounts);
+      console.log('Total borrowings found:', allBorrowings.length);
+      console.log('==============================');
+      
+      // Try different possible status values for pending
+      pendingBorrowings = await Borrowing.count({
+        where: {
+          status: 'pending',
+          deleted_at: null
+        }
+      });
+      console.log('Pending borrowings count (looking for "pending"):', pendingBorrowings);
+      
+      // If pending count is 0, try other common status values
+      if (pendingBorrowings === 0) {
+        const submittedCount = await Borrowing.count({
+          where: { status: 'submitted', deleted_at: null }
+        });
+        console.log('Submitted borrowings count (looking for "submitted"):', submittedCount);
+        
+        const requestedCount = await Borrowing.count({
+          where: { status: 'requested', deleted_at: null }
+        });
+        console.log('Requested borrowings count (looking for "requested"):', requestedCount);
+        
+        const awaitingCount = await Borrowing.count({
+          where: { status: 'awaiting_approval', deleted_at: null }
+        });
+        console.log('Awaiting approval count (looking for "awaiting_approval"):', awaitingCount);
+        
+        // Use the first non-zero count we find, or check if any of these exist in statusCounts
+        if (statusCounts['submitted'] > 0) {
+          pendingBorrowings = submittedCount;
+          console.log('Using "submitted" status for pending count:', pendingBorrowings);
+        } else if (statusCounts['requested'] > 0) {
+          pendingBorrowings = requestedCount;
+          console.log('Using "requested" status for pending count:', pendingBorrowings);
+        } else if (statusCounts['awaiting_approval'] > 0) {
+          pendingBorrowings = awaitingCount;
+          console.log('Using "awaiting_approval" status for pending count:', pendingBorrowings);
+        } else {
+          // Check if there are any statuses that aren't 'approved' and use them as pending
+          const nonApprovedStatuses = Object.keys(statusCounts).filter(status => 
+            status !== 'approved' && status !== 'completed' && status !== 'returned' && status !== 'rejected'
+          );
+          
+          if (nonApprovedStatuses.length > 0) {
+            const firstPendingStatus = nonApprovedStatuses[0];
+            pendingBorrowings = statusCounts[firstPendingStatus];
+            console.log(`Using "${firstPendingStatus}" status for pending count:`, pendingBorrowings);
+          }
+        }
+      }
+      
     } catch (error) {
       console.warn('Could not get pending borrowings count:', error.message);
+      pendingBorrowings = 0;
     }
     
     const report = {
@@ -91,6 +205,7 @@ router.get('/monthly', authenticateToken, requireAdminOrTechnician, async (req, 
       overdueBorrowings
     };
     
+    console.log('Monthly report summary:', report.summary);
     console.log('Monthly report generated successfully');
     res.json(report);
   } catch (error) {
@@ -107,12 +222,39 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
     const dueEquipment = await Equipment.getDueForMaintenance();
     const overdueBorrowings = await Borrowing.getOverdue();
     
+    // Use the same logic as monthly report for consistent counts
+    let pendingBorrowings = await Borrowing.count({ where: { status: 'pending', deleted_at: null } });
+    
+    // If no pending found, try other status values
+    if (pendingBorrowings === 0) {
+      const allBorrowings = await Borrowing.findAll({
+        attributes: ['status'],
+        where: { deleted_at: null },
+        raw: true
+      });
+      
+      const statusCounts = {};
+      allBorrowings.forEach(borrowing => {
+        const status = borrowing.status;
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
+      
+      // Use same logic as monthly report
+      if (statusCounts['submitted'] > 0) {
+        pendingBorrowings = statusCounts['submitted'];
+      } else if (statusCounts['requested'] > 0) {
+        pendingBorrowings = statusCounts['requested'];
+      } else if (statusCounts['awaiting_approval'] > 0) {
+        pendingBorrowings = statusCounts['awaiting_approval'];
+      }
+    }
+    
     const report = {
       summary: {
-        totalChemicals: (await Chemical.findAll()).length,
-        totalEquipment: (await Equipment.findAll()).length,
-        activeBorrowings: (await Borrowing.findAll({ status: 'approved' })).length,
-        pendingBorrowings: (await Borrowing.findAll({ status: 'pending' })).length,
+        totalChemicals: await Chemical.count({ where: { deleted_at: null } }),
+        totalEquipment: await Equipment.count({ where: { deleted_at: null } }),
+        activeBorrowings: await Borrowing.count({ where: { status: 'approved', deleted_at: null } }),
+        pendingBorrowings: pendingBorrowings,
         overdueBorrowings: overdueBorrowings.length
       },
       expiringChemicals,
@@ -197,12 +339,39 @@ router.get('/csv', authenticateToken, requireAdminOrTechnician, async (req, res)
     const dueEquipment = await Equipment.getDueForMaintenance();
     const overdueBorrowings = await Borrowing.getOverdue();
     
+    // Use the same logic as monthly report for consistent counts
+    let pendingBorrowings = await Borrowing.count({ where: { status: 'pending', deleted_at: null } });
+    
+    // If no pending found, try other status values
+    if (pendingBorrowings === 0) {
+      const allBorrowings = await Borrowing.findAll({
+        attributes: ['status'],
+        where: { deleted_at: null },
+        raw: true
+      });
+      
+      const statusCounts = {};
+      allBorrowings.forEach(borrowing => {
+        const status = borrowing.status;
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
+      
+      // Use same logic as monthly report
+      if (statusCounts['submitted'] > 0) {
+        pendingBorrowings = statusCounts['submitted'];
+      } else if (statusCounts['requested'] > 0) {
+        pendingBorrowings = statusCounts['requested'];
+      } else if (statusCounts['awaiting_approval'] > 0) {
+        pendingBorrowings = statusCounts['awaiting_approval'];
+      }
+    }
+    
     const report = {
       summary: {
-        totalChemicals: (await Chemical.findAll()).length,
-        totalEquipment: (await Equipment.findAll()).length,
-        activeBorrowings: (await Borrowing.findAll({ status: 'approved' })).length,
-        pendingBorrowings: (await Borrowing.findAll({ status: 'pending' })).length,
+        totalChemicals: await Chemical.count({ where: { deleted_at: null } }),
+        totalEquipment: await Equipment.count({ where: { deleted_at: null } }),
+        activeBorrowings: await Borrowing.count({ where: { status: 'approved', deleted_at: null } }),
+        pendingBorrowings: pendingBorrowings,
         overdueBorrowings: overdueBorrowings.length
       },
       expiringChemicals,

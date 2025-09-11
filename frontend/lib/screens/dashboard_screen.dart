@@ -27,6 +27,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
+  String _getHealthStatus(int count) {
+    if (count == 0) return 'critical';
+    if (count < 5) return 'warning';
+    return 'good';
+  }
+
+  double _getHealthPercentage(int count) {
+    if (count == 0) return 0.0;
+    if (count < 5) return 50.0;
+    return 85.0;
+  }
+
+  String _getBorrowingHealthStatus(int count) {
+    if (count > 20) return 'warning';
+    if (count > 10) return 'good';
+    return 'good';
+  }
+
+  double _getBorrowingHealthPercentage(int count) {
+    if (count > 20) return 60.0;
+    return 85.0;
+  }
+
+  String _getPendingHealthStatus(int count) {
+    if (count > 10) return 'critical';
+    if (count > 5) return 'warning';
+    return 'good';
+  }
+
+  double _getPendingHealthPercentage(int count) {
+    if (count > 10) return 25.0;
+    if (count > 5) return 60.0;
+    return 90.0;
+  }
+
+  String _getChemicalQuickStat() {
+    int totalChemicals = _reportData!['summary']['totalChemicals'] ?? 0;
+    if (totalChemicals == 0) return 'No chemicals in inventory';
+    if (totalChemicals == 1) return '1 chemical in inventory';
+    return '$totalChemicals chemicals in inventory';
+  }
+
+  String _getEquipmentQuickStat() {
+    int totalEquipment = _reportData!['summary']['totalEquipment'] ?? 0;
+    if (totalEquipment == 0) return 'No equipment in inventory';
+    if (totalEquipment == 1) return '1 equipment item';
+    return '$totalEquipment equipment items';
+  }
+
+  String _getBorrowingQuickStat() {
+    int activeBorrowings = _reportData!['summary']['activeBorrowings'] ?? 0;
+    if (activeBorrowings == 0) return 'No active borrowings';
+    if (activeBorrowings == 1) return '1 active borrowing';
+    return '$activeBorrowings active borrowings';
+  }
+
+  String _getPendingQuickStat() {
+    int pendingBorrowings = _reportData!['summary']['pendingBorrowings'] ?? 0;
+    if (pendingBorrowings == 0) return 'No pending requests';
+    if (pendingBorrowings == 1) return '1 pending request';
+    return '$pendingBorrowings pending requests';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -433,11 +496,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             .toString(),
                                         Icons.science,
                                         Colors.blue,
-                                        trendDirection: 'up',
-                                        trendPercentage: 12.5,
-                                        healthStatus: 'good',
-                                        healthPercentage: 78.0,
-                                        quickStat: '5 expiring this month',
+                                        trendDirection:
+                                            'stable', // Changed from 'up'
+                                        trendPercentage:
+                                            0.0, // Changed from 12.5
+                                        healthStatus: _getHealthStatus(
+                                            _reportData!['summary']
+                                                ['totalChemicals']),
+                                        healthPercentage: _getHealthPercentage(
+                                            _reportData!['summary']
+                                                ['totalChemicals']),
+                                        quickStat:
+                                            _getChemicalQuickStat(), // This will now show correct count
                                       ),
                                       _buildEnhancedSummaryCard(
                                         'Equipment',
@@ -448,9 +518,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         Colors.green,
                                         trendDirection: 'stable',
                                         trendPercentage: 0.0,
-                                        healthStatus: 'warning',
-                                        healthPercentage: 65.0,
-                                        quickStat: '3 need maintenance',
+                                        healthStatus: _getHealthStatus(
+                                            _reportData!['summary']
+                                                ['totalEquipment']),
+                                        healthPercentage: _getHealthPercentage(
+                                            _reportData!['summary']
+                                                ['totalEquipment']),
+                                        quickStat:
+                                            _getEquipmentQuickStat(), // This will now show correct count
                                       ),
                                       _buildEnhancedSummaryCard(
                                         'Active Borrowings',
@@ -459,11 +534,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             .toString(),
                                         Icons.check_circle,
                                         Colors.orange,
-                                        trendDirection: 'up',
-                                        trendPercentage: 8.3,
-                                        healthStatus: 'good',
-                                        healthPercentage: 85.0,
-                                        quickStat: '12 due this week',
+                                        trendDirection:
+                                            'stable', // Changed from 'up'
+                                        trendPercentage:
+                                            0.0, // Changed from 8.3
+                                        healthStatus: _getBorrowingHealthStatus(
+                                            _reportData!['summary']
+                                                ['activeBorrowings']),
+                                        healthPercentage:
+                                            _getBorrowingHealthPercentage(
+                                                _reportData!['summary']
+                                                    ['activeBorrowings']),
+                                        quickStat:
+                                            _getBorrowingQuickStat(), // This will now show correct count
                                       ),
                                       _buildEnhancedSummaryCard(
                                         'Pending Requests',
@@ -472,11 +555,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             .toString(),
                                         Icons.pending,
                                         Colors.purple,
-                                        trendDirection: 'down',
-                                        trendPercentage: -5.2,
-                                        healthStatus: 'good',
-                                        healthPercentage: 90.0,
-                                        quickStat: '3 urgent approvals',
+                                        trendDirection:
+                                            'stable', // Changed from 'down'
+                                        trendPercentage:
+                                            0.0, // Changed from -5.2
+                                        healthStatus: _getPendingHealthStatus(
+                                            _reportData!['summary']
+                                                ['pendingBorrowings']),
+                                        healthPercentage:
+                                            _getPendingHealthPercentage(
+                                                _reportData!['summary']
+                                                    ['pendingBorrowings']),
+                                        quickStat:
+                                            _getPendingQuickStat(), // This will now show correct count
                                       ),
                                     ],
                                   );
@@ -763,9 +854,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       builder: (context) => const ChatBotScreen()),
                 );
               },
-              child: const Icon(Icons.chat_bubble),
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
+              child: const Icon(Icons.chat_bubble),
             ),
           ),
         ],
@@ -1159,11 +1250,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     content: Text('Reminder set for low stock item')),
               );
             },
-            child: const Text('Set Reminder'),
             style: TextButton.styleFrom(
               foregroundColor: color,
               textStyle: const TextStyle(fontSize: 12),
             ),
+            child: const Text('Set Reminder'),
           ),
         ];
         break;
@@ -1191,11 +1282,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SnackBar(content: Text('Navigate to user contact')),
               );
             },
-            child: const Text('Contact User'),
             style: TextButton.styleFrom(
               foregroundColor: color,
               textStyle: const TextStyle(fontSize: 12),
             ),
+            child: const Text('Contact User'),
           ),
         ];
         break;
@@ -1223,11 +1314,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SnackBar(content: Text('Alert marked as resolved')),
               );
             },
-            child: const Text('Mark Resolved'),
             style: TextButton.styleFrom(
               foregroundColor: color,
               textStyle: const TextStyle(fontSize: 12),
             ),
+            child: const Text('Mark Resolved'),
           ),
         ];
         break;
@@ -1241,11 +1332,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 SnackBar(content: Text('View details for $alertType')),
               );
             },
-            child: const Text('View Details'),
             style: TextButton.styleFrom(
               foregroundColor: color,
               textStyle: const TextStyle(fontSize: 12),
             ),
+            child: const Text('View Details'),
           ),
         ];
     }

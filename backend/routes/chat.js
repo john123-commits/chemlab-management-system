@@ -13,15 +13,58 @@ router.get('/conversations', authenticateToken, async (req, res) => {
     console.log('User ID:', req.user.userId);
     console.log('User Role:', req.user.role);
     
-    if (!['technician', 'borrower'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Only technicians and borrowers can access conversations' });
+    // Allow admins, technicians, and borrowers to access conversations
+    if (!['admin', 'technician', 'borrower'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Access denied' });
     }
     
-    const conversations = await Chat.getConversations(req.user.userId, req.user.role);
+    let conversations;
     
-    // Add unread count for each conversation
-    for (let conv of conversations) {
-      conv.unreadCount = await Chat.getUnreadCount(conv.id, req.user.userId);
+    if (req.user.role === 'admin') {
+      // Admins can see all conversations
+      const result = await db.query(`
+        SELECT DISTINCT ON (c.id) 
+          c.id, c.created_at,
+          t.id as technician_id, t.name as technician_name, t.email as technician_email,
+          b.id as borrower_id, b.name as borrower_name, b.email as borrower_email,
+          b.student_id as borrower_student_id,
+          m.message as last_message,
+          m.created_at as last_message_time,
+          m.sender_id as last_sender_id
+        FROM conversations c
+        JOIN users t ON c.technician_id = t.id
+        JOIN users b ON c.borrower_id = b.id
+        LEFT JOIN messages m ON c.id = m.conversation_id
+        ORDER BY c.id, m.created_at DESC
+      `);
+      
+      conversations = result.rows.map(conv => ({
+        id: conv.id,
+        createdAt: conv.created_at,
+        technician: {
+          id: conv.technician_id,
+          name: conv.technician_name,
+          email: conv.technician_email
+        },
+        borrower: {
+          id: conv.borrower_id,
+          name: conv.borrower_name,
+          email: conv.borrower_email,
+          studentId: conv.borrower_student_id
+        },
+        lastMessage: conv.last_message,
+        lastMessageTime: conv.last_message_time,
+        lastSenderId: conv.last_sender_id,
+        unreadCount: 0
+      }));
+    } else {
+      // For technicians and borrowers, use existing logic
+      conversations = await Chat.getConversations(req.user.userId, req.user.role);
+      
+      // Add unread count for each conversation
+      for (let conv of conversations) {
+        conv.unreadCount = await Chat.getUnreadCount(conv.id, req.user.userId);
+      }
     }
     
     console.log(`Returning ${conversations.length} conversations`);
@@ -50,9 +93,12 @@ router.get('/conversations/:conversationId/messages', authenticateToken, async (
     }
     
     const conv = conversation.rows[0];
-    const isAuthorized = (conv.technician_id === req.user.userId) || (conv.borrower_id === req.user.userId);
     
-    if (!isAuthorized) {
+    // Allow access for admins, or if user is part of the conversation
+    const isAdmin = req.user.role === 'admin';
+    const isParticipant = (conv.technician_id === req.user.userId) || (conv.borrower_id === req.user.userId);
+    
+    if (!isAdmin && !isParticipant) {
       return res.status(403).json({ error: 'Access denied to this conversation' });
     }
     
@@ -61,8 +107,10 @@ router.get('/conversations/:conversationId/messages', authenticateToken, async (
     
     const messages = await Chat.getMessages(req.params.conversationId, limit, offset);
     
-    // Mark messages as read
-    await Chat.markAsRead(req.params.conversationId, req.user.userId);
+    // Mark messages as read (only for participants, not admins viewing)
+    if (isParticipant) {
+      await Chat.markAsRead(req.params.conversationId, req.user.userId);
+    }
     
     console.log(`Returning ${messages.length} messages`);
     res.json(messages);
@@ -91,9 +139,12 @@ router.post('/conversations/:conversationId/messages', authenticateToken, async 
     }
     
     const conv = conversation.rows[0];
-    const isAuthorized = (conv.technician_id === req.user.userId) || (conv.borrower_id === req.user.userId);
     
-    if (!isAuthorized) {
+    // Allow access for admins, or if user is part of the conversation
+    const isAdmin = req.user.role === 'admin';
+    const isParticipant = (conv.technician_id === req.user.userId) || (conv.borrower_id === req.user.userId);
+    
+    if (!isAdmin && !isParticipant) {
       return res.status(403).json({ error: 'Access denied to this conversation' });
     }
     
@@ -141,7 +192,7 @@ router.post('/conversations', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Target user not found' });
     }
     
-    // Validate role compatibility
+    // Validate role compatibility (admins can create conversations too)
     if (req.user.role === 'technician' && targetUser.role !== 'borrower') {
       return res.status(403).json({ error: 'Technicians can only chat with borrowers' });
     }
@@ -150,14 +201,35 @@ router.post('/conversations', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Borrowers can only chat with technicians' });
     }
     
+    if (req.user.role === 'admin') {
+      // Admins can create conversations between technicians and borrowers
+      if (!((req.user.role === 'admin' && targetUser.role === 'technician') ||
+            (req.user.role === 'admin' && targetUser.role === 'borrower'))) {
+        // For admin, we need both a technician and borrower
+        return res.status(400).json({ error: 'Admin needs to specify both technician and borrower for conversation' });
+      }
+    }
+    
     // Create conversation (ensure technician is always first, borrower second for consistency)
     let technicianId, borrowerId;
+    
     if (req.user.role === 'technician') {
       technicianId = req.user.userId;
       borrowerId = targetUser.id;
-    } else {
+    } else if (req.user.role === 'borrower') {
       technicianId = targetUser.id;
       borrowerId = req.user.userId;
+    } else if (req.user.role === 'admin') {
+      // For admin, assume they're creating a conversation for the target user
+      if (targetUser.role === 'technician') {
+        technicianId = targetUser.id;
+        // You might need to specify borrower ID differently for admin
+        return res.status(400).json({ error: 'Admin must specify both technician and borrower IDs' });
+      } else {
+        borrowerId = targetUser.id;
+        // You might need to specify technician ID differently for admin
+        return res.status(400).json({ error: 'Admin must specify both technician and borrower IDs' });
+      }
     }
     
     const conversation = await Chat.createConversation(technicianId, borrowerId);
@@ -204,8 +276,10 @@ router.get('/users/:userId', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Check if they can chat (technician-borrower relationship)
-    const canChat = (currentUser.role === 'technician' && targetUser.role === 'borrower') ||
+    // Check if they can chat (technician-borrower relationship or admin access)
+    const isAdmin = currentUser.role === 'admin';
+    const canChat = isAdmin || 
+                   (currentUser.role === 'technician' && targetUser.role === 'borrower') ||
                    (currentUser.role === 'borrower' && targetUser.role === 'technician');
     
     if (!canChat) {
@@ -249,13 +323,19 @@ router.post('/conversations/:conversationId/read', authenticateToken, async (req
     }
     
     const conv = conversation.rows[0];
-    const isAuthorized = (conv.technician_id === req.user.userId) || (conv.borrower_id === req.user.userId);
     
-    if (!isAuthorized) {
+    // Allow access for admins, or if user is part of the conversation
+    const isAdmin = req.user.role === 'admin';
+    const isParticipant = (conv.technician_id === req.user.userId) || (conv.borrower_id === req.user.userId);
+    
+    if (!isAdmin && !isParticipant) {
       return res.status(403).json({ error: 'Access denied' });
     }
     
-    await Chat.markAsRead(req.params.conversationId, req.user.userId);
+    // Only mark as read for participants, not admins viewing
+    if (isParticipant) {
+      await Chat.markAsRead(req.params.conversationId, req.user.userId);
+    }
     
     res.json({ message: 'Messages marked as read' });
   } catch (error) {

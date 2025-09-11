@@ -18,6 +18,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   bool _isRefreshing = false;
   String? _errorMessage;
   List<_ChartData> _chartData = [];
+  List<Map<String, dynamic>> _equipmentChartData = [];
 
   @override
   void initState() {
@@ -36,6 +37,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     try {
       final report = await ApiService.getMonthlyReport();
       _prepareChartData(report);
+      await _prepareEquipmentChartData(); // Load real equipment data
       setState(() {
         _reportData = report;
         _isLoading = false;
@@ -68,6 +70,42 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _ChartData('Expiring Soon', expiringChemicals),
       _ChartData('Low Stock', lowStockChemicals),
     ];
+  }
+
+  Future<void> _prepareEquipmentChartData() async {
+    try {
+      print('Loading equipment data...');
+      // Get actual equipment data from API
+      final equipment = await ApiService.getEquipment();
+      print('Loaded ${equipment.length} equipment items');
+
+      // Count equipment by condition
+      Map<String, int> conditionCounts = {};
+
+      for (var item in equipment) {
+        print('Equipment: ${item.name}, Condition: ${item.condition}');
+        final condition = item.condition ??
+            'Unknown'; // Use dot notation instead of ['condition']
+        conditionCounts[condition] = (conditionCounts[condition] ?? 0) + 1;
+      }
+
+      print('Equipment condition counts: $conditionCounts');
+
+      // Convert to chart data format
+      _equipmentChartData = conditionCounts.entries
+          .map((entry) => {
+                'condition': entry.key,
+                'count': entry.value,
+              })
+          .toList();
+
+      // Sort by count for better visualization
+      _equipmentChartData.sort((a, b) => b['count'].compareTo(a['count']));
+    } catch (error) {
+      print('Error loading equipment data for chart: $error');
+      // Fallback to empty data if equipment loading fails
+      _equipmentChartData = [];
+    }
   }
 
   Future<void> _refreshReport() async {
@@ -311,63 +349,114 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Additional Charts - Equipment Status
-                            Card(
-                              margin: const EdgeInsets.symmetric(vertical: 8),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Equipment Status Overview',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    SizedBox(
-                                      height: 250,
-                                      child: SfCartesianChart(
-                                        primaryXAxis: CategoryAxis(),
-                                        primaryYAxis: NumericAxis(),
-                                        title: const ChartTitle(
-                                            text: 'Equipment by Condition'),
-                                        legend: const Legend(isVisible: true),
-                                        tooltipBehavior:
-                                            TooltipBehavior(enable: true),
-                                        series: <CartesianSeries>[
-                                          ColumnSeries<Map<String, dynamic>,
-                                              String>(
-                                            dataSource: [
-                                              {
-                                                'condition': 'Excellent',
-                                                'count': 2
-                                              },
-                                              {'condition': 'Good', 'count': 2},
-                                              {'condition': 'Fair', 'count': 1},
-                                            ],
-                                            xValueMapper:
-                                                (Map<String, dynamic> data,
-                                                        _) =>
-                                                    data['condition'],
-                                            yValueMapper:
-                                                (Map<String, dynamic> data,
-                                                        _) =>
-                                                    data['count'],
-                                            name: 'Equipment Count',
-                                            color: Colors.blue,
-                                            dataLabelSettings:
-                                                const DataLabelSettings(
-                                                    isVisible: true),
-                                          )
-                                        ],
+                            // Equipment Status Chart - Now using real data
+                            if (_equipmentChartData.isNotEmpty) ...[
+                              Card(
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Equipment Status Overview',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 16),
+                                      SizedBox(
+                                        height: 250,
+                                        child: SfCartesianChart(
+                                          primaryXAxis: CategoryAxis(),
+                                          primaryYAxis: NumericAxis(minimum: 0),
+                                          title: const ChartTitle(
+                                              text: 'Equipment by Condition'),
+                                          legend:
+                                              const Legend(isVisible: false),
+                                          tooltipBehavior:
+                                              TooltipBehavior(enable: true),
+                                          series: <CartesianSeries>[
+                                            ColumnSeries<Map<String, dynamic>,
+                                                String>(
+                                              dataSource: _equipmentChartData,
+                                              xValueMapper:
+                                                  (Map<String, dynamic> data,
+                                                          _) =>
+                                                      data['condition'],
+                                              yValueMapper:
+                                                  (Map<String, dynamic> data,
+                                                          _) =>
+                                                      data['count'],
+                                              name: 'Equipment Count',
+                                              pointColorMapper:
+                                                  (Map<String, dynamic> data,
+                                                      _) {
+                                                switch (data['condition']
+                                                    .toString()
+                                                    .toLowerCase()) {
+                                                  case 'excellent':
+                                                    return Colors.green;
+                                                  case 'good':
+                                                    return Colors.blue;
+                                                  case 'fair':
+                                                    return Colors.orange;
+                                                  case 'poor':
+                                                    return Colors.red;
+                                                  default:
+                                                    return Colors.grey;
+                                                }
+                                              },
+                                              dataLabelSettings:
+                                                  const DataLabelSettings(
+                                                      isVisible: true),
+                                            )
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
+                            ] else ...[
+                              // Show message when no equipment data
+                              Card(
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        'Equipment Status Overview',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Container(
+                                        height: 100,
+                                        width: double.infinity,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[100],
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            'No equipment data available',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                           const SizedBox(height: 24),
 
