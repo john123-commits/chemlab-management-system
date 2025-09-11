@@ -48,1589 +48,1108 @@ const {
   createErrorResponse
 } = require('../utils/chatbotValidation');
 
+// Main message processor
 async function processChatMessage(message, userId, userRole) {
   try {
-    // Validate inputs
+    // Input validation
     validateMessage(message);
     await validateUserId(userId);
     validateUserRole(userRole);
 
-    // Sanitize the message
     const sanitizedMessage = sanitizeInput(message);
     const lowerMessage = sanitizedMessage.toLowerCase();
 
-    // Get or create conversation and load context
+    // Get conversation context
     const conversation = await getOrCreateConversation(userId);
     let context = {};
-
+    
     if (conversation) {
       context = await getConversationContext(conversation.id);
-
-      // Update conversation timestamp
-      try {
-        const { Pool } = require('pg');
-        const pool = new Pool({
-          user: process.env.DB_USER,
-          host: process.env.DB_HOST,
-          database: process.env.DB_NAME,
-          password: process.env.DB_PASSWORD,
-          port: process.env.DB_PORT,
-        });
-        await pool.query(
-          'UPDATE chat_conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
-          [conversation.id]
-        );
-      } catch (error) {
-        console.error('Failed to update conversation timestamp:', error);
-      }
+      await updateConversationTimestamp(conversation.id);
     }
 
-    // Log the query for audit purposes
-    try {
-      await logChatbotQuery(userId, sanitizedMessage, '', 'user_query');
-    } catch (error) {
-      console.error('Failed to log chatbot query:', error);
-    }
+    // Log query
+    await logQuery(userId, sanitizedMessage, 'user_query');
 
-  // Enhanced chemical detail queries
-  if ((lowerMessage.includes('chemical') || lowerMessage.includes('substance')) &&
-       (lowerMessage.includes('detail') || lowerMessage.includes('info') || lowerMessage.includes('property') || lowerMessage.includes('what is'))) {
-    const response = await handleChemicalDetailsQuery(message, conversation?.id);
-    await logChatbotQuery(userId, message, response, 'chemical_details');
+    // Route to appropriate handler based on message intent
+    const response = await routeMessage(lowerMessage, sanitizedMessage, userId, userRole, context, conversation);
+    
+    // Log response
+    await logQuery(userId, sanitizedMessage, response, 'assistant_response');
+    
     return response;
-  }
-
-  // Enhanced equipment detail queries
-  if ((lowerMessage.includes('equipment') || lowerMessage.includes('device') || lowerMessage.includes('instrument')) &&
-       (lowerMessage.includes('detail') || lowerMessage.includes('info') || lowerMessage.includes('spec') || lowerMessage.includes('what is'))) {
-    const response = await handleEquipmentDetailsQuery(message, conversation?.id);
-    await logChatbotQuery(userId, message, response, 'equipment_details');
-    return response;
-  }
-
-  // General chemical availability queries
-  if (lowerMessage.includes('chemical') && (lowerMessage.includes('available') || lowerMessage.includes('have') || lowerMessage.includes('stock'))) {
-    const response = await handleChemicalQuery(message, userId);
-    await logChatbotQuery(userId, message, response, 'chemical_availability');
-    return response;
-  }
-
-  // General equipment availability queries
-  if (lowerMessage.includes('equipment') && (lowerMessage.includes('available') || lowerMessage.includes('have'))) {
-    const response = await handleEquipmentQuery(message, userId);
-    await logChatbotQuery(userId, message, response, 'equipment_availability');
-    return response;
-  }
-
-  // Low stock and expiry alerts
-  if (lowerMessage.includes('low stock') || lowerMessage.includes('running low') || lowerMessage.includes('expiring') || lowerMessage.includes('expiry')) {
-    const response = await handleInventoryAlertsQuery(message);
-    await logChatbotQuery(userId, message, response, 'inventory_alerts');
-    return response;
-  }
-
-  // Equipment maintenance queries
-  if (lowerMessage.includes('maintenance') || lowerMessage.includes('calibration') || lowerMessage.includes('service')) {
-    const response = await handleMaintenanceQuery(message);
-    await logChatbotQuery(userId, message, response, 'maintenance');
-    return response;
-  }
-
-  // Equipment booking queries
-  if ((lowerMessage.includes('book') || lowerMessage.includes('reserve') || lowerMessage.includes('schedule')) &&
-      (lowerMessage.includes('equipment') || lowerMessage.includes('device') || lowerMessage.includes('instrument'))) {
-    const response = await handleEquipmentBookingQuery(message, userId, userRole);
-    await logChatbotQuery(userId, message, response, 'equipment_booking');
-    return response;
-  }
-
-  // Purchase request queries
-  if (lowerMessage.includes('request') && (lowerMessage.includes('purchase') || lowerMessage.includes('order') || lowerMessage.includes('buy'))) {
-    const response = await handlePurchaseRequestQuery(message, userId, userRole);
-    await logChatbotQuery(userId, message, response, 'purchase_request');
-    return response;
-  }
-
-  // Protocol suggestion queries
-  if (lowerMessage.includes('protocol') || lowerMessage.includes('procedure') || lowerMessage.includes('experiment') || lowerMessage.includes('method')) {
-    const response = await handleProtocolQuery(message);
-    await logChatbotQuery(userId, message, response, 'protocol_suggestion');
-    return response;
-  }
-
-  // Safety and compatibility queries
-  if (lowerMessage.includes('compatible') || lowerMessage.includes('storage') || lowerMessage.includes('hazard') || lowerMessage.includes('danger')) {
-    const response = await handleSafetyCompatibilityQuery(message);
-    await logChatbotQuery(userId, message, response, 'safety_compatibility');
-    return response;
-  }
-
-  // Borrowing requests
-  if ((lowerMessage.includes('borrow') || lowerMessage.includes('request')) && !lowerMessage.includes('status')) {
-    const response = await handleBorrowingRequest(message, userId, userRole);
-    await logChatbotQuery(userId, message, response, 'borrowing_request');
-    return response;
-  }
-
-  // Borrowing status queries
-  if (lowerMessage.includes('status') && (lowerMessage.includes('borrow') || lowerMessage.includes('request'))) {
-    const response = await handleBorrowingStatus(message, userId, userRole);
-    await logChatbotQuery(userId, message, response, 'borrowing_status');
-    return response;
-  }
-
-  // Lecture schedule queries
-  if (lowerMessage.includes('schedule') || lowerMessage.includes('booking') || lowerMessage.includes('lab time') || lowerMessage.includes('class')) {
-    const response = await handleScheduleQuery(message, userId, userRole);
-    await logChatbotQuery(userId, message, response, 'schedule');
-    return response;
-  }
-
-  // Safety information queries
-  if (lowerMessage.includes('safety') || lowerMessage.includes('precaution') || lowerMessage.includes('msds') || lowerMessage.includes('spill') || lowerMessage.includes('ppe')) {
-    const response = await handleSafetyQuery(message);
-    await logChatbotQuery(userId, message, response, 'safety');
-    return response;
-  }
-
-  // Borrowing history queries
-  if (lowerMessage.includes('history') || lowerMessage.includes('past')) {
-    const response = await handleHistoryQuery(message, userId, userRole);
-    await logChatbotQuery(userId, message, response, 'history');
-    return response;
-  }
-
-  // Help queries
-  if (lowerMessage.includes('help') || lowerMessage.includes('what can') || lowerMessage.includes('assist')) {
-    const response = await handleHelpQuery(message, userId, userRole);
-    await logChatbotQuery(userId, message, response, 'help');
-    return response;
-  }
-
-  // Context-aware follow-up responses
-  const contextualResponse = await handleContextualFollowUp(message, context, conversation?.id);
-  if (contextualResponse) {
-    await logChatbotQuery(userId, message, contextualResponse, 'contextual_followup');
-    return contextualResponse;
-  }
-
-  // Enhanced default response with contextual suggestions based on actual system state
-  const chemicals = await getChemicals();
-  const equipment = await getEquipment();
-  const schedules = await getLectureSchedules();
-  const borrowings = await getBorrowings();
-  const userBorrowings = borrowings.filter(b => b.borrower_id === userId);
-
-  let defaultResponse = "🤖 **ChemBot: Your Lab Assistant!**\n\n";
-
-  // Personalized greeting based on context
-  if (context.last_topic) {
-    defaultResponse += `💭 Picking up from ${context.last_topic}...\n\n`;
-  }
-
-  // Quick system overview
-  defaultResponse += `**Quick Status:**\n`;
-  defaultResponse += `• 🧪 Chemicals: ${chemicals.length} in stock\n`;
-  defaultResponse += `• ⚙️ Equipment: ${equipment.length} available\n`;
-  if (schedules.length > 0) {
-    const today = new Date().toISOString().split('T')[0];
-    const todaySchedules = schedules.filter(s => s.date === today);
-    defaultResponse += `• 📅 Today's labs: ${todaySchedules.length}\n`;
-  }
-  if (userBorrowings.length > 0) {
-    const pending = userBorrowings.filter(b => b.status === 'pending').length;
-    if (pending > 0) {
-      defaultResponse += `• 📋 Your pending requests: ${pending}\n`;
-    }
-  }
-  defaultResponse += `\n**How can I help?**\n\n`;
-
-  // Concise, prioritized suggestions
-  defaultResponse += "🔬 **Chemicals**\n";
-  if (chemicals.length > 0) {
-    const sample = chemicals[0];
-    defaultResponse += `• Search chemicals (${chemicals.length} total)\n`;
-    defaultResponse += `• Details on ${sample.name}\n`;
-  } else {
-    defaultResponse += `• Request restock\n`;
-  }
-  defaultResponse += `\n`;
-
-  defaultResponse += "⚙️ **Equipment**\n";
-  if (equipment.length > 0) {
-    const sample = equipment[0];
-    const available = equipment.filter(e => e.status === 'available').length;
-    defaultResponse += `• Available equipment (${available}/${equipment.length})\n`;
-    defaultResponse += `• Info on ${sample.name}\n`;
-  } else {
-    defaultResponse += `• Request new equipment\n`;
-  }
-  defaultResponse += `\n`;
-
-  defaultResponse += "📋 **Your Requests**\n";
-  if (userBorrowings.length > 0) {
-    defaultResponse += `• Check my ${userBorrowings.length} requests\n`;
-  }
-  defaultResponse += `• View borrowing history\n\n`;
-
-  defaultResponse += "🛡️ **Safety & Schedules**\n";
-  if (schedules.length > 0) {
-    defaultResponse += `• Today's schedule\n`;
-  }
-  defaultResponse += `• Lab safety tips\n`;
-  defaultResponse += `• PPE requirements\n\n`;
-
-  if (userRole === 'admin' || userRole === 'technician') {
-    defaultResponse += "💼 **Admin Tools**\n";
-    defaultResponse += `• System alerts\n`;
-    defaultResponse += `• Review requests\n`;
-    defaultResponse += `• Update inventory\n\n`;
-  }
-
-  defaultResponse += "💬 Ask me anything lab-related! (e.g., 'Help with protocols')";
-
-  await logChatbotQuery(userId, sanitizedMessage, defaultResponse, 'default');
-  return defaultResponse;
 
   } catch (error) {
-    const errorResponse = createErrorResponse(error, 'I encountered an error while processing your message. Please try again.');
-    try {
-      await logChatbotQuery(userId, sanitizedMessage || message, errorResponse, 'error');
-    } catch (logError) {
-      console.error('Failed to log error response:', logError);
-    }
+    console.error('Message processing error:', error);
+    const errorResponse = createErrorResponse(error, 'I encountered an error. Please try again.');
+    await logQuery(userId, message, errorResponse, 'error');
     return errorResponse;
   }
 }
 
-async function handleChemicalDetailsQuery(message, conversationId = null) {
+// Smart message router
+async function routeMessage(lowerMessage, originalMessage, userId, userRole, context, conversation) {
+  // Priority 1: Handle contextual follow-ups
+  if (context && Object.keys(context).length > 0) {
+    const contextualResponse = await handleContextualResponse(originalMessage, context, conversation?.id);
+    if (contextualResponse) return contextualResponse;
+  }
+
+  // Priority 2: Specific queries about chemicals/equipment
+  if (containsChemicalQuery(lowerMessage)) {
+    return await handleChemicalQuery(originalMessage, userId, conversation?.id);
+  }
+
+  if (containsEquipmentQuery(lowerMessage)) {
+    return await handleEquipmentQuery(originalMessage, userId, conversation?.id);
+  }
+
+  // Priority 3: Action requests
+  if (containsBorrowingRequest(lowerMessage)) {
+    return await handleBorrowingRequest(originalMessage, userId, userRole);
+  }
+
+  if (containsScheduleQuery(lowerMessage)) {
+    return await handleScheduleQuery(originalMessage, userId);
+  }
+
+  if (containsSafetyQuery(lowerMessage)) {
+    return await handleSafetyQuery(originalMessage);
+  }
+
+  // Priority 4: Status and information queries
+  if (containsInventoryAlert(lowerMessage)) {
+    return await handleInventoryAlerts();
+  }
+
+  if (containsMaintenanceQuery(lowerMessage)) {
+    return await handleMaintenanceStatus();
+  }
+
+  // Priority 5: Help and default
+  if (lowerMessage.includes('help') || lowerMessage.includes('what can')) {
+    return await generateHelpResponse(userId, userRole);
+  }
+
+  // Default: Intelligent response based on current system state
+  return await generateIntelligentDefault(userId, userRole);
+}
+
+// Query type detection helpers
+function containsChemicalQuery(message) {
+  const chemicalKeywords = ['chemical', 'reagent', 'compound', 'substance', 'solution'];
+  const actionKeywords = ['what is', 'tell me about', 'details', 'info', 'properties', 'available', 'stock'];
+  
+  return chemicalKeywords.some(keyword => message.includes(keyword)) &&
+         actionKeywords.some(action => message.includes(action));
+}
+
+function containsEquipmentQuery(message) {
+  const equipmentKeywords = ['equipment', 'instrument', 'device', 'apparatus', 'machine'];
+  const actionKeywords = ['what is', 'tell me about', 'details', 'spec', 'available', 'book'];
+  
+  return equipmentKeywords.some(keyword => message.includes(keyword)) &&
+         actionKeywords.some(action => message.includes(action));
+}
+
+function containsBorrowingRequest(message) {
+  return message.includes('borrow') || message.includes('request') || message.includes('need');
+}
+
+function containsScheduleQuery(message) {
+  return message.includes('schedule') || message.includes('booking') || message.includes('when');
+}
+
+function containsSafetyQuery(message) {
+  return message.includes('safety') || message.includes('hazard') || message.includes('ppe') || 
+         message.includes('spill') || message.includes('emergency');
+}
+
+function containsInventoryAlert(message) {
+  return message.includes('low stock') || message.includes('expiring') || message.includes('expired');
+}
+
+function containsMaintenanceQuery(message) {
+  return message.includes('maintenance') || message.includes('calibration') || message.includes('service');
+}
+
+// Enhanced chemical query handler
+async function handleChemicalQuery(message, userId, conversationId) {
   try {
-    // Extract chemical name from message using regex for better matching
-    const chemicalPattern = /(?:what is|tell me about|details of|information on|properties of)\s+(.*?)(?:\s+chemical|\s+substance|$)/i;
-    const match = message.match(chemicalPattern);
-
-    let chemicalName = null;
-    if (match && match[1]) {
-      chemicalName = match[1].trim();
-    } else {
-      // Fallback: look for common chemical names
-      const commonChemicals = [
-        'sodium chloride', 'hydrochloric acid', 'sulfuric acid', 'sodium hydroxide',
-        'ethanol', 'acetone', 'ammonia', 'nitric acid', 'acetic acid',
-        'methanol', 'benzene', 'toluene', 'xylene', 'formaldehyde'
-      ];
-
-      for (const chem of commonChemicals) {
-        if (message.toLowerCase().includes(chem)) {
-          chemicalName = chem;
-          break;
-        }
-      }
-    }
-
+    // Extract chemical name from message
+    const chemicalName = extractChemicalName(message);
+    
     if (chemicalName) {
-      const chemical = await findChemicalFlexible(chemicalName);
-
+      // Search for specific chemical
+      const chemical = await findChemicalInDatabase(chemicalName);
+      
       if (chemical) {
-        // Set context for follow-up conversations
+        // Store in context for follow-up questions
         if (conversationId) {
           await setConversationContext(conversationId, 'last_chemical', chemical.name);
-          await setConversationContext(conversationId, 'last_topic', 'chemical_details');
+          await setConversationContext(conversationId, 'last_chemical_id', chemical.id);
         }
-
-        let response = `🧪 **${chemical.name} Detailed Information**\n\n`;
-
-        // Basic information
-        response += `**📋 Basic Information:**\n`;
-        response += `• **Name**: ${chemical.name}\n`;
-        response += `• **Category**: ${chemical.category}\n`;
-        response += `• **Quantity Available**: ${chemical.quantity} ${chemical.unit}\n`;
-        response += `• **Storage Location**: ${chemical.storage_location}\n`;
-        if (chemical.expiry_date) {
-          response += `• **Expiry Date**: ${new Date(chemical.expiry_date).toLocaleDateString()}\n`;
-        }
-
-        // Chemical properties (if available)
-        const hasChemicalProperties = chemical.c_number || chemical.molecular_formula || chemical.molecular_weight;
-        if (hasChemicalProperties) {
-          response += `\n**🔬 Chemical Properties:**\n`;
-          if (chemical.c_number) response += `• **CAS Number**: ${chemical.c_number}\n`;
-          if (chemical.molecular_formula) response += `• **Molecular Formula**: ${chemical.molecular_formula}\n`;
-          if (chemical.molecular_weight) response += `• **Molecular Weight**: ${chemical.molecular_weight} g/mol\n`;
-          if (chemical.physical_state) response += `• **Physical State**: ${chemical.physical_state}\n`;
-          if (chemical.color) response += `• **Color**: ${chemical.color}\n`;
-          if (chemical.density) response += `• **Density**: ${chemical.density} g/cm³\n`;
-          if (chemical.melting_point) response += `• **Melting Point:** ${chemical.melting_point}\n`;
-          if (chemical.boiling_point) response += `• **Boiling Point:** ${chemical.boiling_point}\n`;
-          if (chemical.solubility) response += `• **Solubility:** ${chemical.solubility}\n`;
-        }
-
-        // Safety information (if available)
-        const hasSafetyInfo = chemical.storage_conditions || chemical.hazard_class || chemical.safety_precautions;
-        if (hasSafetyInfo) {
-          response += `\n**⚠️ Safety Information:**\n`;
-          if (chemical.storage_conditions) response += `• **Storage Conditions:** ${chemical.storage_conditions}\n`;
-          if (chemical.hazard_class) response += `• **Hazard Class:** ${chemical.hazard_class}\n`;
-          if (chemical.safety_precautions) response += `• **Safety Precautions:** ${chemical.safety_precautions}\n`;
-          if (chemical.safety_info) response += `• **Additional Safety Info:** ${chemical.safety_info}\n`;
-          if (chemical.msds_link) response += `• **MSDS Link:** ${chemical.msds_link}\n`;
-        }
-
-        if (!hasChemicalProperties && !hasSafetyInfo) {
-          response += `\n*Additional detailed information (properties, safety data) can be added through the admin panel.*\n`;
-        }
-
-        // Add helpful follow-up suggestions
-        response += `\n💡 **Need more help?**\n`;
-        response += `• Ask about safety procedures for this chemical\n`;
-        response += `• Check availability and request borrowing\n`;
-        response += `• View related chemicals in the same category\n`;
-
-        return response;
+        
+        return formatChemicalDetails(chemical);
       } else {
-        // Try searching for similar chemicals
-        const searchResults = await searchChemicals(chemicalName);
-        if (searchResults.length > 0) {
-          let response = `I couldn't find the exact chemical "${chemicalName}", but I found these similar chemicals:\n\n`;
-          searchResults.slice(0, 5).forEach((chem, index) => {
-            response += `${index + 1}. ${chem.name} (${chem.category}) - ${chem.quantity} ${chem.unit}\n`;
-          });
-          response += `\nPlease ask about any of these chemicals for detailed information.`;
-          return response;
+        // Chemical not found - search for similar
+        const similar = await searchSimilarChemicals(chemicalName);
+        if (similar.length > 0) {
+          return formatSimilarChemicals(similar, chemicalName);
+        } else {
+          return formatChemicalNotFound(chemicalName);
         }
-
-        return `Sorry, I couldn't find details for "${chemicalName}". Please check the spelling or ask about a different chemical.`;
       }
-    }
-
-    // If no specific chemical mentioned, show search results
-    const searchTerm = extractSearchTerm(message, ['chemical', 'substance', 'compound']);
-    const chemicals = await searchChemicals(searchTerm);
-
-    if (chemicals.length > 0) {
-      let response = `I found ${chemicals.length} chemicals in our inventory:\n\n`;
-      chemicals.slice(0, 5).forEach((chem, index) => {
-        response += `${index + 1}. ${chem.name} (${chem.category}) - ${chem.quantity} ${chem.unit}\n`;
-      });
-      response += `\nAsk me about any specific chemical for detailed information. For example: "What are the details of ${chemicals[0].name}?"`;
-      return response;
-    }
-
-    // Check if entire inventory is empty
-    const allChemicals = await getChemicals();
-    if (allChemicals.length === 0) {
-      return `Our chemical inventory is currently empty. Please contact lab administration to restock. You can still ask about equipment, schedules, or safety information.`;
-    }
-
-    return `I couldn't find chemicals matching your query. Try asking about general availability with "What chemicals are available?" or specify a different term.`;
-  } catch (error) {
-    console.error('Chemical details query error:', error);
-    return "Sorry, I'm having trouble accessing the chemical details right now.";
-  }
-}
-
-async function handleEquipmentDetailsQuery(message, conversationId = null) {
-  try {
-    // Extract equipment name from message
-    const equipmentPattern = /(?:what is|tell me about|details of|information on|specifications of)\s+(.*?)(?:\s+equipment|\s+device|\s+instrument|$)/i;
-    const match = message.match(equipmentPattern);
-
-    let equipmentName = null;
-    if (match && match[1]) {
-      equipmentName = match[1].trim();
     } else {
-      // Fallback: look for common equipment names
-      const commonEquipment = [
-        'microscope', 'centrifuge', 'spectrophotometer', 'balance', 'autoclave',
-        'incubator', 'oven', 'refrigerator', 'freezer', 'ph meter',
-        'chromatograph', 'spectrometer', 'calorimeter', 'titrator'
-      ];
-
-      for (const eq of commonEquipment) {
-        if (message.toLowerCase().includes(eq)) {
-          equipmentName = eq;
-          break;
-        }
-      }
+      // No specific chemical mentioned - show overview
+      return await generateChemicalOverview();
     }
-
-    if (equipmentName) {
-      const equipment = await findEquipmentFlexible(equipmentName);
-
-      if (equipment) {
-        // Set context for follow-up conversations
-        if (conversationId) {
-          await setConversationContext(conversationId, 'last_equipment', equipment.name);
-          await setConversationContext(conversationId, 'last_topic', 'equipment_details');
-        }
-
-        let response = `⚙️ **${equipment.name} Detailed Information**\n\n`;
-
-        // Basic information
-        response += `**📋 Basic Information:**\n`;
-        response += `• **Name**: ${equipment.name}\n`;
-        response += `• **Category**: ${equipment.category}\n`;
-        response += `• **Condition**: ${equipment.condition}\n`;
-        response += `• **Location**: ${equipment.location}\n`;
-        response += `• **Maintenance Schedule**: Every ${equipment.maintenance_schedule} days\n`;
-        if (equipment.last_maintenance_date) {
-          response += `• **Last Maintenance**: ${new Date(equipment.last_maintenance_date).toLocaleDateString()}\n`;
-        }
-
-        // Technical details (if available)
-        const hasTechnicalDetails = equipment.serial_number || equipment.manufacturer || equipment.model;
-        if (hasTechnicalDetails) {
-          response += `\n**🔧 Technical Details:**\n`;
-          if (equipment.serial_number) response += `• **Serial Number**: ${equipment.serial_number}\n`;
-          if (equipment.manufacturer) response += `• **Manufacturer**: ${equipment.manufacturer}\n`;
-          if (equipment.model) response += `• **Model**: ${equipment.model}\n`;
-          if (equipment.purchase_date) response += `• **Purchase Date**: ${new Date(equipment.purchase_date).toLocaleDateString()}\n`;
-          if (equipment.warranty_expiry) response += `• **Warranty Expiry**: ${new Date(equipment.warranty_expiry).toLocaleDateString()}\n`;
-        }
-
-        // Calibration information (if available)
-        const hasCalibrationInfo = equipment.calibration_date || equipment.next_calibration_date;
-        if (hasCalibrationInfo) {
-          response += `\n**📅 Calibration Information:**\n`;
-          if (equipment.calibration_date) response += `• **Last Calibration**: ${new Date(equipment.calibration_date).toLocaleDateString()}\n`;
-          if (equipment.next_calibration_date) response += `• **Next Calibration**: ${new Date(equipment.next_calibration_date).toLocaleDateString()}\n`;
-        }
-
-        if (!hasTechnicalDetails && !hasCalibrationInfo) {
-          response += `\n*Additional technical details can be added through the admin panel.*\n`;
-        }
-
-        // Add helpful follow-up suggestions
-        response += `\n💡 **Need more help?**\n`;
-        response += `• Check maintenance schedule and status\n`;
-        response += `• Request borrowing for this equipment\n`;
-        response += `• View similar equipment in the same category\n`;
-
-        return response;
-      } else {
-        // Try searching for similar equipment
-        const searchResults = await searchEquipment(equipmentName);
-        if (searchResults.length > 0) {
-          let response = `I couldn't find the exact equipment "${equipmentName}", but I found these similar items:\n\n`;
-          searchResults.slice(0, 5).forEach((eq, index) => {
-            response += `${index + 1}. ${eq.name} (${eq.category}) - ${eq.condition}\n`;
-          });
-          response += `\nPlease ask about any of these equipment items for detailed information.`;
-          return response;
-        }
-
-        return `Sorry, I couldn't find details for "${equipmentName}". Please check the spelling or ask about a different equipment.`;
-      }
-    }
-
-    // If no specific equipment mentioned, show search results
-    const searchTerm = extractSearchTerm(message, ['equipment', 'device', 'instrument']);
-    const equipments = await searchEquipment(searchTerm);
-
-    if (equipments.length > 0) {
-      let response = `I found ${equipments.length} equipment items in our inventory:\n\n`;
-      equipments.slice(0, 5).forEach((eq, index) => {
-        response += `${index + 1}. ${eq.name} (${eq.category}) - ${eq.condition}\n`;
-      });
-      response += `\nAsk me about any specific equipment for detailed information. For example: "What are the details of ${equipments[0].name}?"`;
-      return response;
-    }
-
-    // Check if entire inventory is empty
-    const allEquipment = await getEquipment();
-    if (allEquipment.length === 0) {
-      return `Our equipment inventory is currently empty. Please contact lab administration. You can still ask about schedules, safety information, or submit purchase requests.`;
-    }
-
-    return `I couldn't find equipment matching your query. Try asking about general availability with "What equipment is available?" or specify a different term.`;
-  } catch (error) {
-    console.error('Equipment details query error:', error);
-    return "Sorry, I'm having trouble accessing the equipment details right now.";
-  }
-}
-
-async function handleChemicalQuery(message, userId) {
-  try {
-    const chemicals = await getChemicals();
-    const count = chemicals.length;
-    
-    // Extract specific chemical name if mentioned
-    const chemicalNames = [
-      'sodium chloride', 'hydrochloric acid', 'sulfuric acid', 'sodium hydroxide',
-      'ethanol', 'acetone', 'ammonia', 'nitric acid', 'acetic acid'
-    ];
-    
-    let specificChemical = null;
-    for (const name of chemicalNames) {
-      if (message.toLowerCase().includes(name)) {
-        specificChemical = name;
-        break;
-      }
-    }
-    
-    if (specificChemical) {
-      const filteredChemicals = chemicals.filter(c =>
-        c.name.toLowerCase().includes(specificChemical)
-      );
-      
-      if (filteredChemicals.length > 0) {
-        const chem = filteredChemicals[0];
-        return `I found ${chem.name}:\n` +
-               `• Quantity: ${chem.quantity} ${chem.unit}\n` +
-               `• Location: ${chem.storage_location || 'Storage Room A'}\n` +
-               `• Expiry: ${chem.expiry_date ? new Date(chem.expiry_date).toLocaleDateString() : 'N/A'}`;
-      } else {
-        return `Sorry, we don't have ${specificChemical} in stock right now.`;
-      }
-    }
-    
-    if (count === 0) {
-      return `No chemicals are currently available in our inventory. Please check back later or contact lab administration to restock.`;
-    }
-    
-    return `I found ${count} chemicals in our inventory. Some popular ones include:\n` +
-           `• Sodium Chloride\n` +
-           `• Hydrochloric Acid\n` +
-           `• Ethanol\n` +
-           `Would you like information about a specific chemical?`;
   } catch (error) {
     console.error('Chemical query error:', error);
-    return "Sorry, I'm having trouble accessing the chemical inventory right now.";
+    return "I'm having trouble accessing chemical information. Please try again.";
   }
 }
 
-async function handleEquipmentQuery(message, userId) {
+// Enhanced equipment query handler
+async function handleEquipmentQuery(message, userId, conversationId) {
   try {
-    const equipment = await getEquipment();
-    const availableCount = equipment.filter(e => e.status === 'available').length;
+    const equipmentName = extractEquipmentName(message);
     
-    if (equipment.length === 0) {
-      return `No equipment is currently available in our inventory. Please check back later or contact lab administration.`;
+    if (equipmentName) {
+      const equipment = await findEquipmentInDatabase(equipmentName);
+      
+      if (equipment) {
+        if (conversationId) {
+          await setConversationContext(conversationId, 'last_equipment', equipment.name);
+          await setConversationContext(conversationId, 'last_equipment_id', equipment.id);
+        }
+        
+        return formatEquipmentDetails(equipment);
+      } else {
+        const similar = await searchSimilarEquipment(equipmentName);
+        if (similar.length > 0) {
+          return formatSimilarEquipment(similar, equipmentName);
+        } else {
+          return formatEquipmentNotFound(equipmentName);
+        }
+      }
+    } else {
+      return await generateEquipmentOverview();
     }
-    
-    return `We have ${equipment.length} pieces of equipment in total, with ${availableCount} currently available.\n` +
-           `Popular equipment includes:\n` +
-           `• Microscopes\n` +
-           `• Centrifuges\n` +
-           `• Spectrophotometers\n` +
-           `Would you like to know about specific equipment?`;
   } catch (error) {
     console.error('Equipment query error:', error);
-    return "Sorry, I'm having trouble accessing the equipment inventory right now.";
+    return "I'm having trouble accessing equipment information. Please try again.";
   }
 }
 
-async function handleBorrowingRequest(message, userId, userRole) {
-  // Extract potential item from message
-  const items = ['beaker', 'test tube', 'burette', 'pipette', 'centrifuge', 'microscope', 'spectrophotometer'];
-  let requestedItem = null;
-  
-  for (const item of items) {
-    if (message.toLowerCase().includes(item)) {
-      requestedItem = item;
-      break;
-    }
-  }
-  
-  if (requestedItem) {
-    return `I can help you borrow a ${requestedItem}!\n` +
-           `To proceed with your borrowing request, please specify:\n` +
-           `1. Quantity needed\n` +
-           `2. Duration (start and end date)\n` +
-           `3. Purpose of use\n` +
-           `Or you can go to the Borrowing section in the app to submit a formal request.`;
-  }
-  
-  return "I can help you with borrowing requests! You can:\n" +
-         "• Check your current requests\n" +
-         "• Submit a new borrowing request for chemicals or equipment\n" +
-         "• Extend an existing borrowing period\n" +
-         "What would you like to borrow?";
-}
-
-async function handleBorrowingStatus(message, userId, userRole) {
+// Database search functions with error handling
+async function findChemicalInDatabase(name) {
   try {
-    const borrowings = await getBorrowings();
-    const userBorrowings = borrowings.filter(b => b.borrower_id === userId);
-    const pendingCount = userBorrowings.filter(b => b.status === 'pending').length;
-    const activeCount = userBorrowings.filter(b => b.status === 'approved').length;
-    const overdueCount = userBorrowings.filter(b => b.status === 'overdue').length;
+    // Try exact match first
+    let chemical = await getChemicalByName(name);
+    if (chemical) return chemical;
     
-    if (userBorrowings.length === 0) {
-      return "You don't have any borrowing requests at the moment.";
+    // Try case-insensitive search
+    const allChemicals = await getChemicals();
+    chemical = allChemicals.find(c => 
+      c.name.toLowerCase() === name.toLowerCase()
+    );
+    if (chemical) return chemical;
+    
+    // Try partial match
+    chemical = allChemicals.find(c => 
+      c.name.toLowerCase().includes(name.toLowerCase()) ||
+      name.toLowerCase().includes(c.name.toLowerCase())
+    );
+    
+    return chemical || null;
+  } catch (error) {
+    console.error('Database search error:', error);
+    return null;
+  }
+}
+
+async function findEquipmentInDatabase(name) {
+  try {
+    let equipment = await getEquipmentByName(name);
+    if (equipment) return equipment;
+    
+    const allEquipment = await getEquipment();
+    equipment = allEquipment.find(e => 
+      e.name.toLowerCase() === name.toLowerCase()
+    );
+    if (equipment) return equipment;
+    
+    equipment = allEquipment.find(e => 
+      e.name.toLowerCase().includes(name.toLowerCase()) ||
+      name.toLowerCase().includes(e.name.toLowerCase())
+    );
+    
+    return equipment || null;
+  } catch (error) {
+    console.error('Database search error:', error);
+    return null;
+  }
+}
+
+async function searchSimilarChemicals(searchTerm) {
+  try {
+    const results = await searchChemicals(searchTerm);
+    return results.slice(0, 5);
+  } catch (error) {
+    console.error('Search error:', error);
+    return [];
+  }
+}
+
+async function searchSimilarEquipment(searchTerm) {
+  try {
+    const results = await searchEquipment(searchTerm);
+    return results.slice(0, 5);
+  } catch (error) {
+    console.error('Search error:', error);
+    return [];
+  }
+}
+
+// Format response functions
+function formatChemicalDetails(chemical) {
+  let response = `📋 **${chemical.name}**\n\n`;
+  
+  // Always show what we actually have in database
+  response += `**Current Inventory:**\n`;
+  response += `• Quantity: ${chemical.quantity} ${chemical.unit}\n`;
+  response += `• Location: ${chemical.storage_location}\n`;
+  response += `• Category: ${chemical.category}\n`;
+  
+  if (chemical.expiry_date) {
+    const expiryDate = new Date(chemical.expiry_date);
+    const daysUntilExpiry = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
+    response += `• Expiry: ${expiryDate.toLocaleDateString()}`;
+    
+    if (daysUntilExpiry < 0) {
+      response += ` ⚠️ EXPIRED`;
+    } else if (daysUntilExpiry < 30) {
+      response += ` (${daysUntilExpiry} days remaining)`;
+    }
+    response += `\n`;
+  }
+  
+  // Only show properties that exist in database
+  if (chemical.cas_number || chemical.molecular_formula || chemical.molecular_weight) {
+    response += `\n**Chemical Properties:**\n`;
+    if (chemical.cas_number) response += `• CAS Number: ${chemical.cas_number}\n`;
+    if (chemical.molecular_formula) response += `• Formula: ${chemical.molecular_formula}\n`;
+    if (chemical.molecular_weight) response += `• Molecular Weight: ${chemical.molecular_weight} g/mol\n`;
+  }
+  
+  // Safety information if available
+  if (chemical.hazard_class || chemical.storage_conditions) {
+    response += `\n**Safety Information:**\n`;
+    if (chemical.hazard_class) response += `• Hazard Class: ${chemical.hazard_class}\n`;
+    if (chemical.storage_conditions) response += `• Storage Requirements: ${chemical.storage_conditions}\n`;
+  }
+  
+  // Actionable next steps
+  response += `\n**Actions:**\n`;
+  response += `• To borrow this chemical, specify quantity needed\n`;
+  response += `• For safety data sheet, ask "safety for ${chemical.name}"\n`;
+  if (chemical.quantity <= 10) {
+    response += `• ⚠️ Low stock - consider requesting more\n`;
+  }
+  
+  return response;
+}
+
+function formatEquipmentDetails(equipment) {
+  let response = `⚙️ **${equipment.name}**\n\n`;
+  
+  response += `**Current Status:**\n`;
+  response += `• Status: ${equipment.status}\n`;
+  response += `• Condition: ${equipment.condition}\n`;
+  response += `• Location: ${equipment.location}\n`;
+  response += `• Category: ${equipment.category}\n`;
+  
+  if (equipment.last_maintenance_date) {
+    const lastMaintenance = new Date(equipment.last_maintenance_date);
+    const daysSince = Math.floor((new Date() - lastMaintenance) / (1000 * 60 * 60 * 24));
+    response += `• Last Maintenance: ${lastMaintenance.toLocaleDateString()} (${daysSince} days ago)\n`;
+    
+    if (equipment.maintenance_schedule && daysSince > equipment.maintenance_schedule) {
+      response += `• ⚠️ Maintenance overdue by ${daysSince - equipment.maintenance_schedule} days\n`;
+    }
+  }
+  
+  // Technical details if available
+  if (equipment.serial_number || equipment.manufacturer) {
+    response += `\n**Technical Details:**\n`;
+    if (equipment.serial_number) response += `• Serial: ${equipment.serial_number}\n`;
+    if (equipment.manufacturer) response += `• Manufacturer: ${equipment.manufacturer}\n`;
+    if (equipment.model) response += `• Model: ${equipment.model}\n`;
+  }
+  
+  // Actions based on status
+  response += `\n**Actions:**\n`;
+  if (equipment.status === 'available') {
+    response += `• To book this equipment, specify date and duration\n`;
+  } else if (equipment.status === 'in_use') {
+    response += `• Currently in use - I can check when it will be available\n`;
+  } else if (equipment.status === 'maintenance') {
+    response += `• Under maintenance - expected completion date pending\n`;
+  }
+  
+  return response;
+}
+
+function formatSimilarChemicals(chemicals, searchTerm) {
+  let response = `I couldn't find "${searchTerm}" exactly, but here are similar chemicals in our inventory:\n\n`;
+  
+  chemicals.forEach((chem, index) => {
+    response += `${index + 1}. **${chem.name}**\n`;
+    response += `   • ${chem.quantity} ${chem.unit} available\n`;
+    response += `   • Location: ${chem.storage_location}\n\n`;
+  });
+  
+  response += `Which one would you like to know more about?`;
+  return response;
+}
+
+function formatSimilarEquipment(equipment, searchTerm) {
+  let response = `I couldn't find "${searchTerm}" exactly, but here are similar equipment items:\n\n`;
+  
+  equipment.forEach((eq, index) => {
+    response += `${index + 1}. **${eq.name}**\n`;
+    response += `   • Status: ${eq.status}\n`;
+    response += `   • Location: ${eq.location}\n\n`;
+  });
+  
+  response += `Which one would you like to know more about?`;
+  return response;
+}
+
+function formatChemicalNotFound(searchTerm) {
+  return `I couldn't find any chemical matching "${searchTerm}" in our inventory.\n\n` +
+         `**What you can do:**\n` +
+         `• Check if the name is spelled correctly\n` +
+         `• Try searching with a partial name\n` +
+         `• Browse all chemicals by asking "show all chemicals"\n` +
+         `• Request to purchase this chemical if needed\n\n` +
+         `Would you like me to help with any of these options?`;
+}
+
+function formatEquipmentNotFound(searchTerm) {
+  return `I couldn't find any equipment matching "${searchTerm}" in our inventory.\n\n` +
+         `**What you can do:**\n` +
+         `• Check if the name is spelled correctly\n` +
+         `• Try searching with a partial name\n` +
+         `• Browse all equipment by asking "show all equipment"\n` +
+         `• Request to purchase this equipment if needed\n\n` +
+         `Would you like me to help with any of these options?`;
+}
+
+// Generate overview functions
+async function generateChemicalOverview() {
+  try {
+    const chemicals = await getChemicals();
+    
+    if (chemicals.length === 0) {
+      return `📊 **Chemical Inventory Status**\n\n` +
+             `The chemical inventory is currently empty.\n\n` +
+             `**Available Actions:**\n` +
+             `• Submit a purchase request for needed chemicals\n` +
+             `• Contact lab administration for restocking\n` +
+             `• Check equipment availability instead`;
     }
     
-    let response = `You have ${userBorrowings.length} borrowing requests:\n`;
-    response += `• ${pendingCount} pending approval\n`;
-    response += `• ${activeCount} currently active\n`;
+    // Group by category
+    const categories = {};
+    chemicals.forEach(chem => {
+      if (!categories[chem.category]) {
+        categories[chem.category] = [];
+      }
+      categories[chem.category].push(chem);
+    });
     
-    if (overdueCount > 0) {
-      response += `• ⚠️ ${overdueCount} overdue\n`;
-    }
+    let response = `📊 **Chemical Inventory Overview**\n\n`;
+    response += `Total chemicals in stock: ${chemicals.length}\n\n`;
     
-    // Add details for active requests
-    const activeRequests = userBorrowings.filter(b => b.status === 'approved');
-    if (activeRequests.length > 0) {
-      response += `\n**Active Requests:**\n`;
-      activeRequests.slice(0, 3).forEach((req, index) => {
-        const item = req.chemical_id ? `Chemical ID: ${req.chemical_id}` : `Equipment ID: ${req.equipment_id}`;
-        response += `${index + 1}. ${item} - Due: ${new Date(req.end_date).toLocaleDateString()}\n`;
-      });
-    }
+    response += `**Categories:**\n`;
+    Object.entries(categories).slice(0, 5).forEach(([category, items]) => {
+      response += `• ${category}: ${items.length} items\n`;
+    });
     
-    response += `\nWould you like details about a specific request?`;
+    // Show some examples
+    response += `\n**Sample Chemicals Available:**\n`;
+    chemicals.slice(0, 5).forEach((chem, index) => {
+      response += `${index + 1}. ${chem.name} - ${chem.quantity} ${chem.unit}\n`;
+    });
+    
+    response += `\n**To get specific information:**\n`;
+    response += `Ask "tell me about [chemical name]" for any chemical listed above.`;
+    
     return response;
   } catch (error) {
-    console.error('Borrowing status error:', error);
-    return "Sorry, I'm having trouble accessing your borrowing requests right now.";
+    console.error('Overview generation error:', error);
+    return "I'm having trouble accessing the chemical inventory. Please try again.";
   }
 }
 
-async function handleScheduleQuery(message, userId, userRole) {
+async function generateEquipmentOverview() {
+  try {
+    const equipment = await getEquipment();
+    
+    if (equipment.length === 0) {
+      return `⚙️ **Equipment Inventory Status**\n\n` +
+             `The equipment inventory is currently empty.\n\n` +
+             `**Available Actions:**\n` +
+             `• Submit a purchase request for needed equipment\n` +
+             `• Contact lab administration for procurement\n` +
+             `• Check chemical availability instead`;
+    }
+    
+    const available = equipment.filter(e => e.status === 'available');
+    const inUse = equipment.filter(e => e.status === 'in_use');
+    const maintenance = equipment.filter(e => e.status === 'maintenance');
+    
+    let response = `⚙️ **Equipment Inventory Overview**\n\n`;
+    response += `Total equipment: ${equipment.length}\n`;
+    response += `• Available: ${available.length}\n`;
+    response += `• In use: ${inUse.length}\n`;
+    response += `• Under maintenance: ${maintenance.length}\n\n`;
+    
+    if (available.length > 0) {
+      response += `**Available Equipment:**\n`;
+      available.slice(0, 5).forEach((eq, index) => {
+        response += `${index + 1}. ${eq.name} - ${eq.location}\n`;
+      });
+      response += `\n`;
+    }
+    
+    response += `**To get specific information:**\n`;
+    response += `Ask "tell me about [equipment name]" for any equipment listed above.`;
+    
+    return response;
+  } catch (error) {
+    console.error('Overview generation error:', error);
+    return "I'm having trouble accessing the equipment inventory. Please try again.";
+  }
+}
+
+// Borrowing request handler
+async function handleBorrowingRequest(message, userId, userRole) {
+  try {
+    // Check for specific item mention
+    const itemName = extractItemName(message);
+    
+    if (itemName) {
+      // Check if it's a chemical or equipment
+      const chemical = await findChemicalInDatabase(itemName);
+      const equipment = await findEquipmentInDatabase(itemName);
+      
+      if (chemical) {
+        return `📋 **Borrowing Request for ${chemical.name}**\n\n` +
+               `Available: ${chemical.quantity} ${chemical.unit}\n` +
+               `Location: ${chemical.storage_location}\n\n` +
+               `**To complete your request, please provide:**\n` +
+               `1. Quantity needed (e.g., "50 mL")\n` +
+               `2. Purpose of use\n` +
+               `3. Expected return date\n\n` +
+               `Example: "I need 50 mL for titration experiment, returning tomorrow"`;
+      }
+      
+      if (equipment) {
+        if (equipment.status !== 'available') {
+          return `⚠️ **${equipment.name} is currently ${equipment.status}**\n\n` +
+                 `Would you like me to:\n` +
+                 `• Check when it will be available\n` +
+                 `• Find alternative equipment\n` +
+                 `• Add you to the waiting list`;
+        }
+        
+        return `⚙️ **Booking Request for ${equipment.name}**\n\n` +
+               `Status: Available\n` +
+               `Location: ${equipment.location}\n\n` +
+               `**To complete your booking, please provide:**\n` +
+               `1. Date and time needed\n` +
+               `2. Duration of use\n` +
+               `3. Purpose\n\n` +
+               `Example: "Book for tomorrow 2 PM for 3 hours for spectroscopy analysis"`;
+      }
+      
+      return `Item "${itemName}" not found in inventory.\n\n` +
+             `Would you like to:\n` +
+             `• Search for similar items\n` +
+             `• Submit a purchase request\n` +
+             `• Browse available inventory`;
+    }
+    
+    // General borrowing help
+    const borrowings = await getBorrowings();
+    const userBorrowings = borrowings.filter(b => b.borrower_id === userId);
+    const pending = userBorrowings.filter(b => b.status === 'pending').length;
+    const active = userBorrowings.filter(b => b.status === 'approved').length;
+    
+    let response = `📋 **Borrowing Request Assistant**\n\n`;
+    
+    if (userBorrowings.length > 0) {
+      response += `**Your Current Requests:**\n`;
+      response += `• Pending approval: ${pending}\n`;
+      response += `• Active borrowings: ${active}\n\n`;
+    }
+    
+    response += `**How to make a borrowing request:**\n`;
+    response += `1. Specify what you need (e.g., "borrow sodium chloride")\n`;
+    response += `2. Provide quantity and duration\n`;
+    response += `3. State the purpose\n\n`;
+    response += `What would you like to borrow?`;
+    
+    return response;
+  } catch (error) {
+    console.error('Borrowing request error:', error);
+    return "I'm having trouble processing your borrowing request. Please try again.";
+  }
+}
+
+// Schedule query handler
+async function handleScheduleQuery(message, userId) {
   try {
     const schedules = await getLectureSchedules();
     const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateStr = today.toISOString().split('T')[0];
     
-    // Check if user is asking for specific day
-    let targetDate = today;
+    // Check for specific date mentions
+    let targetDate = dateStr;
     if (message.toLowerCase().includes('tomorrow')) {
-      targetDate = tomorrow;
-    } else if (message.toLowerCase().includes('yesterday')) {
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      targetDate = yesterday;
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      targetDate = tomorrow.toISOString().split('T')[0];
     }
     
-    const targetSchedules = schedules.filter(schedule => {
-      const scheduleDate = new Date(schedule.date);
-      return scheduleDate.toDateString() === targetDate.toDateString();
+    const relevantSchedules = schedules.filter(s => s.date === targetDate);
+    
+    if (relevantSchedules.length === 0) {
+      return `📅 **No lab sessions scheduled for ${targetDate === dateStr ? 'today' : 'tomorrow'}**\n\n` +
+             `Would you like to:\n` +
+             `• Check another date\n` +
+             `• View the weekly schedule\n` +
+             `• Book equipment for independent work`;
+    }
+    
+    let response = `📅 **Lab Schedule for ${targetDate === dateStr ? 'Today' : 'Tomorrow'}**\n\n`;
+    
+    relevantSchedules.forEach((schedule, index) => {
+      response += `${index + 1}. **${schedule.course_name}**\n`;
+      response += `   • Time: ${schedule.start_time} - ${schedule.end_time}\n`;
+      response += `   • Lab: ${schedule.lab_name}\n`;
+      if (schedule.instructor) response += `   • Instructor: ${schedule.instructor}\n`;
+      response += `\n`;
     });
     
-    if (targetSchedules.length > 0) {
-      const dateStr = targetDate.toDateString() === today.toDateString() ? 'Today' : 
-                     targetDate.toDateString() === tomorrow.toDateString() ? 'Tomorrow' : 
-                     targetDate.toLocaleDateString();
-      
-      let response = `${dateStr}'s lab schedule:\n`;
-      targetSchedules.forEach(schedule => {
-        response += `• ${schedule.lab_name}: ${schedule.start_time} - ${schedule.end_time} (${schedule.course_name})\n`;
-      });
-      return response;
-    } else {
-      const dateStr = targetDate.toDateString() === today.toDateString() ? 'today' : 
-                     targetDate.toDateString() === tomorrow.toDateString() ? 'tomorrow' : 
-                     targetDate.toLocaleDateString();
-      return `No lab sessions scheduled for ${dateStr}. Would you like to check another day?`;
-    }
+    return response;
   } catch (error) {
     console.error('Schedule query error:', error);
-    return "Sorry, I'm having trouble accessing the lab schedule right now.";
+    return "I'm having trouble accessing the schedule. Please try again.";
   }
 }
 
+// Safety query handler
 async function handleSafetyQuery(message) {
-  const safetyTopics = [
-    { keyword: 'acid', response: '🧪 **Acid Handling Safety**\n• Always wear safety goggles and gloves\n• Work in a fume hood\n• Add acid to water, never water to acid\n• Have neutralizing agents nearby\n• Store acids separately from bases' },
-    { keyword: 'base', response: '🧂 **Base Handling Safety**\n• Wear protective equipment\n• Avoid skin contact\n• Store separately from acids\n• Label containers clearly\n• Handle with care - bases can be caustic' },
-    { keyword: 'spill', response: '🚨 **Chemical Spill Procedure**\n1. Evacuate the area immediately\n2. Alert lab supervisor\n3. Use appropriate spill kit\n4. Follow SDS guidelines for cleanup\n5. Report the incident to safety officer' },
-    { keyword: 'ppe', response: '👕 **Required PPE for Lab Work**\n• Safety goggles (always)\n• Lab coat (always)\n• Closed-toe shoes (always)\n• Gloves (appropriate type for chemicals used)\n• Face shield (for hazardous procedures)' },
-    { keyword: 'fire', response: '🔥 **Fire Safety**\n• Know location of fire extinguishers\n• Understand fire evacuation routes\n• Never leave heating equipment unattended\n• Keep flammable materials away from heat sources\n• Report any fire hazards immediately' }
+  const lowerMessage = message.toLowerCase();
+  
+  // Check for specific safety topics
+  if (lowerMessage.includes('spill')) {
+    return `🚨 **Chemical Spill Response Protocol**\n\n` +
+           `**Immediate Actions:**\n` +
+           `1. Alert others in the area\n` +
+           `2. Evacuate if necessary\n` +
+           `3. Contain the spill if safe to do so\n\n` +
+           `**Cleanup Steps:**\n` +
+           `1. Wear appropriate PPE\n` +
+           `2. Use spill kit materials\n` +
+           `3. Neutralize if required\n` +
+           `4. Dispose in proper waste container\n` +
+           `5. Report to lab supervisor\n\n` +
+           `**Emergency Contact:** Call lab safety officer immediately`;
+  }
+  
+  if (lowerMessage.includes('ppe') || lowerMessage.includes('protective')) {
+    return `🦺 **Personal Protective Equipment (PPE) Requirements**\n\n` +
+           `**Mandatory PPE:**\n` +
+           `• Safety goggles or face shield\n` +
+           `• Lab coat (buttoned)\n` +
+           `• Closed-toe shoes\n` +
+           `• Appropriate gloves for chemicals used\n\n` +
+           `**Additional PPE (when required):**\n` +
+           `• Face shield for splash hazards\n` +
+           `• Apron for corrosive materials\n` +
+           `• Respirator for toxic vapors\n` +
+           `• Heat-resistant gloves for hot equipment\n\n` +
+           `Always check specific requirements for your experiment.`;
+  }
+  
+  // Check for specific chemical safety
+  const chemicalName = extractChemicalName(message);
+  if (chemicalName) {
+    const chemical = await findChemicalInDatabase(chemicalName);
+    if (chemical && chemical.hazard_class) {
+      return `⚠️ **Safety Information for ${chemical.name}**\n\n` +
+             `**Hazard Class:** ${chemical.hazard_class}\n` +
+             `**Storage Requirements:** ${chemical.storage_conditions || 'Standard chemical storage'}\n\n` +
+             `**General Precautions:**\n` +
+             `• Always wear appropriate PPE\n` +
+             `• Work in well-ventilated area\n` +
+             `• Keep away from incompatible materials\n` +
+             `• Have spill kit readily available\n\n` +
+             `For complete safety data, consult the Safety Data Sheet (SDS).`;
+    }
+  }
+  
+  // General safety information
+  return `🛡️ **Lab Safety Information**\n\n` +
+         `**I can help with:**\n` +
+         `• Chemical spill procedures\n` +
+         `• PPE requirements\n` +
+         `• Emergency protocols\n` +
+         `• Chemical compatibility\n` +
+         `• Waste disposal guidelines\n` +
+         `• First aid procedures\n\n` +
+         `**Specific Topics:**\n` +
+         `• "Safety for [chemical name]"\n` +
+         `• "What to do for acid spill"\n` +
+         `• "PPE for working with bases"\n\n` +
+         `What safety information do you need?`;
+}
+
+// Inventory alerts handler
+async function handleInventoryAlerts() {
+  try {
+    let response = `📊 **Inventory Status Alerts**\n\n`;
+    let hasAlerts = false;
+    
+    // Check low stock chemicals
+    const lowStock = await getLowStockChemicals(10);
+    if (lowStock.length > 0) {
+      hasAlerts = true;
+      response += `**⚠️ Low Stock Chemicals:**\n`;
+      lowStock.slice(0, 5).forEach(chem => {
+        const level = chem.quantity <= 5 ? '🔴' : '🟡';
+        response += `${level} ${chem.name}: ${chem.quantity} ${chem.unit} remaining\n`;
+      });
+      response += `\n`;
+    }
+    
+    // Check expiring chemicals
+    const expiring = await getExpiringChemicals(30);
+    if (expiring.length > 0) {
+      hasAlerts = true;
+      response += `**⏰ Expiring Soon (within 30 days):**\n`;
+      expiring.slice(0, 5).forEach(chem => {
+        const daysLeft = Math.ceil((new Date(chem.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
+        response += `• ${chem.name}: ${daysLeft} days remaining\n`;
+      });
+      response += `\n`;
+    }
+    
+    // Check expired chemicals
+    const expired = await getExpiredChemicals();
+    if (expired.length > 0) {
+      hasAlerts = true;
+      response += `**🚨 Expired Chemicals (Immediate Action Required):**\n`;
+      expired.slice(0, 3).forEach(chem => {
+        response += `• ${chem.name} - Expired ${new Date(chem.expiry_date).toLocaleDateString()}\n`;
+      });
+      response += `\nPlease dispose of these chemicals safely!\n\n`;
+    }
+    
+    if (!hasAlerts) {
+      response += `✅ **All inventory levels are normal**\n\n`;
+      response += `• No chemicals are critically low\n`;
+      response += `• No chemicals expiring soon\n`;
+      response += `• All equipment maintained properly`;
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('Inventory alerts error:', error);
+    return "I'm having trouble checking inventory alerts. Please try again.";
+  }
+}
+
+// Maintenance status handler
+async function handleMaintenanceStatus() {
+  try {
+    let response = `🔧 **Equipment Maintenance Status**\n\n`;
+    let hasIssues = false;
+    
+    // Check equipment due for maintenance
+    const dueMaintenance = await getEquipmentDueForMaintenance();
+    if (dueMaintenance.length > 0) {
+      hasIssues = true;
+      response += `**⚠️ Equipment Due for Maintenance:**\n`;
+      dueMaintenance.slice(0, 5).forEach(eq => {
+        const overdue = eq.days_since_maintenance - eq.maintenance_schedule;
+        const status = overdue > 7 ? '🔴' : overdue > 0 ? '🟡' : '🟢';
+        response += `${status} ${eq.name}: ${overdue > 0 ? `Overdue by ${overdue} days` : 'Due now'}\n`;
+      });
+      response += `\n`;
+    }
+    
+    // Check calibration needs
+    const needsCalibration = await getEquipmentNeedingCalibration();
+    if (needsCalibration.length > 0) {
+      hasIssues = true;
+      response += `**📏 Equipment Needing Calibration:**\n`;
+      needsCalibration.slice(0, 5).forEach(eq => {
+        response += `• ${eq.name}: Due ${new Date(eq.next_calibration_date).toLocaleDateString()}\n`;
+      });
+      response += `\n`;
+    }
+    
+    if (!hasIssues) {
+      response += `✅ **All equipment properly maintained**\n\n`;
+      response += `• No maintenance overdue\n`;
+      response += `• All calibrations current\n`;
+      response += `• All equipment operational`;
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('Maintenance status error:', error);
+    return "I'm having trouble checking maintenance status. Please try again.";
+  }
+}
+
+// Contextual response handler
+async function handleContextualResponse(message, context, conversationId) {
+  try {
+    const lowerMessage = message.toLowerCase();
+    
+    // Handle yes/no responses to pending actions
+    if (context.pending_action) {
+      if (lowerMessage.includes('yes') || lowerMessage.includes('sure') || lowerMessage.includes('ok')) {
+        return await handleAffirmative(context, conversationId);
+      }
+      if (lowerMessage.includes('no') || lowerMessage.includes('not')) {
+        await clearConversationContext(conversationId, 'pending_action');
+        return "No problem! What else can I help you with?";
+      }
+    }
+    
+    // Handle follow-up questions about last item
+    if (context.last_chemical_id && (lowerMessage.includes('borrow') || lowerMessage.includes('request'))) {
+      const chemical = await getChemicalById(context.last_chemical_id);
+      if (chemical) {
+        return formatBorrowingInstructions(chemical, 'chemical');
+      }
+    }
+    
+    if (context.last_equipment_id && (lowerMessage.includes('book') || lowerMessage.includes('reserve'))) {
+      const equipment = await getEquipmentById(context.last_equipment_id);
+      if (equipment) {
+        return formatBorrowingInstructions(equipment, 'equipment');
+      }
+    }
+    
+    // Handle quantity specifications
+    if (context.awaiting_quantity) {
+      const quantityMatch = message.match(/(\d+(?:\.\d+)?)\s*(\w+)/);
+      if (quantityMatch) {
+        return await processQuantityRequest(quantityMatch[1], quantityMatch[2], context, conversationId);
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Contextual response error:', error);
+    return null;
+  }
+}
+
+// Helper functions
+function extractChemicalName(message) {
+  // Remove common phrases to isolate chemical name
+  const patterns = [
+    /tell me about\s+(.+?)(?:\s+chemical)?$/i,
+    /what is\s+(.+?)(?:\s+chemical)?$/i,
+    /details (?:of|for|about)\s+(.+?)$/i,
+    /information (?:on|about)\s+(.+?)$/i,
+    /(.+?)\s+properties$/i,
+    /(.+?)\s+details$/i
   ];
   
-  for (const topic of safetyTopics) {
-    if (message.toLowerCase().includes(topic.keyword)) {
-      return topic.response;
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
     }
   }
   
-  return "🛡️ **Lab Safety Information**\nI can help with various safety topics:\n" +
-         "• 'Safety precautions for acids'\n" +
-         "• 'What PPE should I wear?'\n" +
-         "• 'Chemical spill procedure'\n" +
-         "• 'Fire safety guidelines'\n" +
-         "• 'Base handling safety'\n" +
-         "What specific safety information do you need?";
+  return null;
 }
 
-async function handleHistoryQuery(message, userId, userRole) {
+function extractEquipmentName(message) {
+  const patterns = [
+    /tell me about\s+(?:the\s+)?(.+?)(?:\s+equipment)?$/i,
+    /what is\s+(?:the\s+)?(.+?)(?:\s+equipment)?$/i,
+    /details (?:of|for|about)\s+(?:the\s+)?(.+?)$/i,
+    /book\s+(?:the\s+)?(.+?)$/i,
+    /reserve\s+(?:the\s+)?(.+?)$/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  
+  return null;
+}
+
+function extractItemName(message) {
+  const patterns = [
+    /borrow\s+(?:some\s+)?(.+?)$/i,
+    /request\s+(?:some\s+)?(.+?)$/i,
+    /need\s+(?:some\s+)?(.+?)$/i,
+    /get\s+(?:some\s+)?(.+?)$/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  
+  return null;
+}
+
+function formatBorrowingInstructions(item, type) {
+  if (type === 'chemical') {
+    return `📋 **To borrow ${item.name}:**\n\n` +
+           `Available: ${item.quantity} ${item.unit}\n\n` +
+           `Please specify:\n` +
+           `• Quantity needed (e.g., "50 mL")\n` +
+           `• Purpose\n` +
+           `• Return date\n\n` +
+           `Example: "I need 100 mL for titration, returning Friday"`;
+  } else {
+    return `⚙️ **To book ${item.name}:**\n\n` +
+           `Status: ${item.status}\n\n` +
+           `Please specify:\n` +
+           `• Date and time\n` +
+           `• Duration\n` +
+           `• Purpose\n\n` +
+           `Example: "Book for Monday 10 AM for 2 hours"`;
+  }
+}
+
+async function handleAffirmative(context, conversationId) {
+  if (context.pending_action === 'purchase_request') {
+    await setConversationContext(conversationId, 'awaiting_quantity', true);
+    return `How much ${context.item_name} would you like to request?\n` +
+           `Please specify quantity and unit (e.g., "500 mL" or "2 bottles")`;
+  }
+  
+  if (context.pending_action === 'find_alternative') {
+    return await suggestAlternatives(context.item_type, context.item_category);
+  }
+  
+  return "I'll help you with that. Could you provide more details?";
+}
+
+async function processQuantityRequest(quantity, unit, context, conversationId) {
+  await clearConversationContext(conversationId, 'awaiting_quantity');
+  
+  return `✅ **Request Submitted**\n\n` +
+         `Item: ${context.item_name}\n` +
+         `Quantity: ${quantity} ${unit}\n` +
+         `Status: Pending approval\n\n` +
+         `You'll be notified once approved.`;
+}
+
+async function suggestAlternatives(itemType, category) {
+  if (itemType === 'chemical') {
+    const alternatives = await getChemicalsByCategory(category);
+    if (alternatives.length > 0) {
+      let response = `Here are alternative chemicals in the ${category} category:\n\n`;
+      alternatives.slice(0, 5).forEach((item, index) => {
+        response += `${index + 1}. ${item.name} - ${item.quantity} ${item.unit}\n`;
+      });
+      return response;
+    }
+  } else {
+    const alternatives = await getEquipmentByCategory(category);
+    if (alternatives.length > 0) {
+      let response = `Here are alternative equipment options:\n\n`;
+      alternatives.slice(0, 5).forEach((item, index) => {
+        response += `${index + 1}. ${item.name} - ${item.status}\n`;
+      });
+      return response;
+    }
+  }
+  
+  return "No alternatives found in this category.";
+}
+
+// Intelligent default response generator
+async function generateIntelligentDefault(userId, userRole) {
   try {
-    const borrowings = await getBorrowings();
+    const [chemicals, equipment, schedules, borrowings] = await Promise.all([
+      getChemicals(),
+      getEquipment(),
+      getLectureSchedules(),
+      getBorrowings()
+    ]);
+    
     const userBorrowings = borrowings.filter(b => b.borrower_id === userId);
-    const completedCount = userBorrowings.filter(b => b.status === 'returned').length;
-    const rejectedCount = userBorrowings.filter(b => b.status === 'rejected').length;
     
-    if (userBorrowings.length === 0) {
-      return "You don't have any borrowing history yet.";
+    let response = `🤖 **Lab Assistant Ready**\n\n`;
+    
+    // Show actual system status
+    response += `**Current Lab Status:**\n`;
+    
+    if (chemicals.length > 0) {
+      response += `• Chemicals: ${chemicals.length} types available\n`;
+    } else {
+      response += `• Chemicals: Inventory empty - request needed items\n`;
     }
     
-    let response = `📊 **Your Borrowing History**\n`;
-    response += `• Total requests: ${userBorrowings.length}\n`;
-    response += `• Completed returns: ${completedCount}\n`;
-    response += `• Currently active: ${userBorrowings.filter(b => b.status === 'approved').length}\n`;
-    response += `• Rejected requests: ${rejectedCount}\n`;
-    
-    // Show recent history
-    const recentHistory = userBorrowings
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .slice(0, 5);
-    
-    if (recentHistory.length > 0) {
-      response += `\n**Recent Requests:**\n`;
-      recentHistory.forEach((req, index) => {
-        const item = req.chemical_id ? `Chemical ID: ${req.chemical_id}` : `Equipment ID: ${req.equipment_id}`;
-        const status = req.status.charAt(0).toUpperCase() + req.status.slice(1);
-        response += `${index + 1}. ${item} - ${status} (${new Date(req.created_at).toLocaleDateString()})\n`;
-      });
+    if (equipment.length > 0) {
+      const available = equipment.filter(e => e.status === 'available').length;
+      response += `• Equipment: ${available}/${equipment.length} available\n`;
+    } else {
+      response += `• Equipment: No equipment in inventory\n`;
     }
+    
+    if (userBorrowings.length > 0) {
+      const pending = userBorrowings.filter(b => b.status === 'pending').length;
+      if (pending > 0) response += `• You have ${pending} pending requests\n`;
+    }
+    
+    response += `\n**Quick Actions:**\n`;
+    response += `• "Tell me about [chemical/equipment name]"\n`;
+    response += `• "What chemicals are available?"\n`;
+    response += `• "Book [equipment name]"\n`;
+    response += `• "Check today's schedule"\n`;
+    response += `• "Safety procedures"\n\n`;
+    
+    response += `What can I help you with?`;
     
     return response;
   } catch (error) {
-    console.error('History query error:', error);
-    return "Sorry, I'm having trouble accessing your borrowing history right now.";
+    console.error('Default response error:', error);
+    return "Hello! I'm your lab assistant. How can I help you today?";
   }
 }
 
-async function handleHelpQuery(message, userId, userRole) {
-  let helpText = "🤖 **ChemBot Help: Your Lab Assistant!**\n\n";
-  helpText += "**What I Can Do:**\n\n";
-
-  // Check current system state for dynamic suggestions
-  const chemicals = await getChemicals();
-  const equipment = await getEquipment();
-  const schedules = await getLectureSchedules();
-  const borrowings = await getBorrowings();
-  const userBorrowings = borrowings.filter(b => b.borrower_id === userId);
-
-  // Core lab functions
-  helpText += "🔬 **Lab Inventory**\n";
-  if (chemicals.length > 0) {
-    const sample = chemicals[0];
-    helpText += `• Search chemicals (${chemicals.length} available)\n`;
-    helpText += `• Details: "${sample.name}"\n`;
-    if (chemicals.length > 5) helpText += `• Low stock alerts\n`;
-  } else {
-    helpText += `• Request chemical restock\n`;
-  }
-  helpText += `\n`;
-
-  helpText += "⚙️ **Equipment**\n";
-  if (equipment.length > 0) {
-    const sample = equipment[0];
-    const available = equipment.filter(e => e.status === 'available').length;
-    helpText += `• Available items (${available}/${equipment.length})\n`;
-    helpText += `• Equipment info: "${sample.name}"\n`;
-    helpText += `• Book equipment\n`;
-  } else {
-    helpText += `• Request new equipment\n`;
-  }
-  helpText += `\n`;
-
-  // User-specific requests
-  helpText += "📋 **Requests & History**\n";
-  if (userBorrowings.length > 0) {
-    helpText += `• Check my ${userBorrowings.length} requests\n`;
-  } else {
-    helpText += `• Submit borrowing request\n`;
-  }
-  helpText += `• View my history\n\n`;
-
-  // Schedules and safety
-  helpText += "📅 **Schedules & Safety**\n";
-  if (schedules.length > 0) {
-    const today = new Date().toISOString().split('T')[0];
-    const todaySchedules = schedules.filter(s => s.date === today);
-    if (todaySchedules.length > 0) helpText += `• Today's schedule (${todaySchedules.length})\n`;
-    helpText += `• Tomorrow's labs\n`;
-  }
-  helpText += `• Safety tips (acids, PPE, spills)\n`;
-  helpText += `• Chemical compatibility\n\n`;
-
-  // Advanced features
-  helpText += "🛒 **Requests & Protocols**\n";
-  if (chemicals.length === 0 || equipment.length === 0) {
-    helpText += `• Purchase requests for supplies\n`;
-  } else {
-    helpText += `• Request reagents (e.g., methanol)\n`;
-  }
-  helpText += `• Protocol suggestions (titration, distillation)\n\n`;
-
-  // Role-specific
+// Help response generator
+async function generateHelpResponse(userId, userRole) {
+  let response = `🤖 **Lab Assistant Help Guide**\n\n`;
+  
+  response += `**What I Can Do:**\n\n`;
+  
+  response += `📊 **Inventory Information**\n`;
+  response += `• Search chemicals and equipment\n`;
+  response += `• Check availability and quantities\n`;
+  response += `• View detailed specifications\n`;
+  response += `• Find items by category\n\n`;
+  
+  response += `📋 **Requests & Borrowing**\n`;
+  response += `• Submit borrowing requests\n`;
+  response += `• Check request status\n`;
+  response += `• View borrowing history\n`;
+  response += `• Request new purchases\n\n`;
+  
+  response += `🛡️ **Safety & Compliance**\n`;
+  response += `• Chemical safety information\n`;
+  response += `• PPE requirements\n`;
+  response += `• Spill procedures\n`;
+  response += `• Storage guidelines\n\n`;
+  
+  response += `📅 **Scheduling**\n`;
+  response += `• View lab schedules\n`;
+  response += `• Book equipment time\n`;
+  response += `• Check availability\n\n`;
+  
   if (userRole === 'admin' || userRole === 'technician') {
-    helpText += "💼 **Staff Tools**\n";
-    helpText += `• System alerts & notifications\n`;
-    helpText += `• Review pending requests\n`;
-    if (chemicals.length > 0 || equipment.length > 0) helpText += `• Update inventory\n`;
-    helpText += `• Maintenance reminders\n\n`;
+    response += `💼 **Admin Functions**\n`;
+    response += `• View system alerts\n`;
+    response += `• Check maintenance status\n`;
+    response += `• Review pending requests\n`;
+    response += `• Monitor inventory levels\n\n`;
   }
-
-  helpText += "**💬 Examples:**\n• 'What chemicals are low?'\n• 'Book microscope for tomorrow'\n• 'Safety for acids'\n• 'Help with titration protocol'";
-
-  return helpText;
+  
+  response += `**Example Commands:**\n`;
+  response += `• "Tell me about sodium chloride"\n`;
+  response += `• "Book the centrifuge for tomorrow"\n`;
+  response += `• "What's expiring soon?"\n`;
+  response += `• "Safety for working with acids"\n\n`;
+  
+  response += `What would you like help with?`;
+  
+  return response;
 }
 
-// New handler functions for enhanced features
-
-async function handleInventoryAlertsQuery(message) {
+// Utility functions
+async function updateConversationTimestamp(conversationId) {
   try {
-    const lowerMessage = message.toLowerCase();
-    let response = "📊 **Inventory Alerts**\n\n";
-
-    // Check for low stock chemicals
-    if (lowerMessage.includes('low') || lowerMessage.includes('stock')) {
-      const lowStockChemicals = await getLowStockChemicals(10);
-      if (lowStockChemicals.length > 0) {
-        response += "**⚠️ Low Stock Chemicals:**\n";
-        lowStockChemicals.slice(0, 5).forEach((chem, index) => {
-          const stockLevel = chem.quantity <= 5 ? '🔴 Critical' : chem.quantity <= 10 ? '🟡 Low' : '🟢 Moderate';
-          response += `${index + 1}. ${chem.name} - ${chem.quantity} ${chem.unit} ${stockLevel}\n`;
-        });
-        response += "\n";
-      } else {
-        response += "**✅ All chemicals are well-stocked**\n\n";
-      }
-    }
-
-    // Check for expiring chemicals
-    if (lowerMessage.includes('expir') || lowerMessage.includes('expir')) {
-      const expiringChemicals = await getExpiringChemicals(30);
-      if (expiringChemicals.length > 0) {
-        response += "**⏰ Expiring Soon (within 30 days):**\n";
-        expiringChemicals.slice(0, 5).forEach((chem, index) => {
-          const daysUntilExpiry = Math.ceil((new Date(chem.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
-          const urgency = daysUntilExpiry <= 7 ? '🔴 Urgent' : daysUntilExpiry <= 14 ? '🟡 Soon' : '🟢 Upcoming';
-          response += `${index + 1}. ${chem.name} - Expires in ${daysUntilExpiry} days ${urgency}\n`;
-        });
-        response += "\n";
-      } else {
-        response += "**✅ No chemicals expiring soon**\n\n";
-      }
-    }
-
-    // Check for expired chemicals
-    const expiredChemicals = await getExpiredChemicals();
-    if (expiredChemicals.length > 0) {
-      response += "**🚨 Expired Chemicals (Action Required):**\n";
-      expiredChemicals.slice(0, 3).forEach((chem, index) => {
-        response += `${index + 1}. ${chem.name} - Expired on ${new Date(chem.expiry_date).toLocaleDateString()}\n`;
-      });
-      response += "\n**Please contact lab staff to dispose of expired chemicals safely.**\n\n";
-    }
-
-    // Check if inventory exists before giving "all normal" message
-    const allChemicals = await getChemicals();
-    const allEquipment = await getEquipment();
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      password: process.env.DB_PASSWORD,
+      port: process.env.DB_PORT,
+    });
     
-    if (response === "📊 **Inventory Alerts**\n\n") {
-      if (allChemicals.length === 0 && allEquipment.length === 0) {
-        response += "⚠️ **Note:** Both chemical and equipment inventories are currently empty. No alerts, but please contact administration to restock.\n\nAll other systems are normal! ✅";
-      } else {
-        response += "No inventory alerts at this time. All systems normal! ✅";
-      }
-    }
-
-    return response;
+    await pool.query(
+      'UPDATE chat_conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [conversationId]
+    );
   } catch (error) {
-    console.error('Inventory alerts query error:', error);
-    return "Sorry, I'm having trouble checking inventory alerts right now.";
+    console.error('Failed to update conversation timestamp:', error);
   }
 }
 
-async function handleMaintenanceQuery(message) {
+async function logQuery(userId, message, response, type) {
   try {
-    const lowerMessage = message.toLowerCase();
-    let response = "🔧 **Equipment Maintenance Status**\n\n";
-
-    // Check equipment due for maintenance
-    const dueForMaintenance = await getEquipmentDueForMaintenance();
-    if (dueForMaintenance.length > 0) {
-      response += "**⚠️ Equipment Due for Maintenance:**\n";
-      dueForMaintenance.slice(0, 5).forEach((eq, index) => {
-        const daysOverdue = eq.days_since_maintenance - eq.maintenance_schedule;
-        const status = daysOverdue > 0 ? `🔴 Overdue by ${daysOverdue} days` : `🟡 Due soon`;
-        response += `${index + 1}. ${eq.name} - ${status}\n`;
-      });
-      response += "\n";
-    } else {
-      response += "**✅ All equipment is up to date with maintenance**\n\n";
-    }
-
-    // Check equipment needing calibration
-    const needingCalibration = await getEquipmentNeedingCalibration();
-    if (needingCalibration.length > 0) {
-      response += "**📏 Equipment Needing Calibration:**\n";
-      needingCalibration.slice(0, 5).forEach((eq, index) => {
-        response += `${index + 1}. ${eq.name} - Due: ${new Date(eq.next_calibration_date).toLocaleDateString()}\n`;
-      });
-      response += "\n";
-    } else {
-      response += "**✅ All equipment calibration is current**\n\n";
-    }
-
-    // Check if equipment exists
-    const allEquipment = await getEquipment();
-    
-    if (response === "🔧 **Equipment Maintenance Status**\n\n") {
-      if (allEquipment.length === 0) {
-        response += "⚠️ **Note:** No equipment currently in inventory, so no maintenance is scheduled. Please contact administration to add equipment.\n\nAll systems are ready! ✅";
-      } else {
-        response += "All equipment maintenance is up to date! ✅";
-      }
-    }
-
-    return response;
+    await logChatbotQuery(userId, message, response, type);
   } catch (error) {
-    console.error('Maintenance query error:', error);
-    return "Sorry, I'm having trouble checking maintenance status right now.";
+    console.error('Failed to log query:', error);
   }
 }
 
-async function handleEquipmentBookingQuery(message, userId, userRole) {
+async function getChemicalById(id) {
   try {
-    // Extract equipment name from message
-    const equipmentPattern = /(?:book|reserve|schedule)\s+(?:the\s+)?(.+?)(?:\s+for|\s+on|$)/i;
-    const match = message.match(equipmentPattern);
-
-    if (match && match[1]) {
-      const equipmentName = match[1].trim();
-      const equipment = await findEquipmentFlexible(equipmentName);
-
-      if (equipment) {
-        // Check availability (simplified - would need date parsing in real implementation)
-        const isAvailable = await checkEquipmentAvailability(equipment.id, new Date(), new Date(Date.now() + 24 * 60 * 60 * 1000));
-
-        if (isAvailable) {
-          return `✅ **${equipment.name} is available for booking!**\n\n` +
-                 `**Equipment Details:**\n` +
-                 `• Location: ${equipment.location}\n` +
-                 `• Condition: ${equipment.condition}\n` +
-                 `• Last Maintenance: ${new Date(equipment.last_maintenance_date).toLocaleDateString()}\n\n` +
-                 `To book this equipment, please specify:\n` +
-                 `• Date and time needed\n` +
-                 `• Duration of use\n` +
-                 `• Purpose of booking\n\n` +
-                 `Or use the Equipment Booking section in the app.`;
-        } else {
-          // Get upcoming bookings
-          const bookings = await getEquipmentBookings(equipment.id, 3);
-          let response = `❌ **${equipment.name} is currently booked**\n\n`;
-
-          if (bookings.length > 0) {
-            response += "**Upcoming Bookings:**\n";
-            bookings.forEach((booking, index) => {
-              response += `${index + 1}. ${new Date(booking.borrow_date).toLocaleDateString()} - ${new Date(booking.return_date).toLocaleDateString()}\n`;
-            });
-            response += "\n";
-          }
-
-          response += "Would you like me to suggest alternative equipment or help you book for a different time?";
-          return response;
-        }
-      } else {
-        // Try searching for similar equipment
-        const searchResults = await searchEquipmentAdvanced(equipmentName);
-        if (searchResults.length > 0) {
-          let response = `I couldn't find "${equipmentName}" exactly, but here are similar options:\n\n`;
-          searchResults.slice(0, 3).forEach((eq, index) => {
-            response += `${index + 1}. ${eq.name} (${eq.category})\n`;
-          });
-          response += "\nWould you like to book any of these instead?";
-          return response;
-        }
-
-        return `Sorry, I couldn't find equipment matching "${equipmentName}". Please check the spelling or ask about available equipment.`;
-      }
-    }
-
-    // Show available equipment for booking
-    const availableEquipment = await getAvailableEquipment();
-    if (availableEquipment.length > 0) {
-      let response = "📅 **Available Equipment for Booking:**\n\n";
-      availableEquipment.slice(0, 10).forEach((eq, index) => {
-        response += `${index + 1}. ${eq.name} (${eq.category}) - ${eq.location}\n`;
-      });
-      response += "\nTo book equipment, specify the equipment name and dates. For example: 'Book the microscope for tomorrow 2 PM'";
-      return response;
-    }
-
-    return "I can help you book equipment! Please specify which equipment you'd like to book and when.";
+    const chemicals = await getChemicals();
+    return chemicals.find(c => c.id === id);
   } catch (error) {
-    console.error('Equipment booking query error:', error);
-    return "Sorry, I'm having trouble with equipment booking right now.";
-  }
-}
-
-async function handlePurchaseRequestQuery(message, userId, userRole) {
-  try {
-    // Extract chemical/equipment name from message
-    const requestPattern = /(?:request|order|buy|purchase|need)\s+(?:\d*\s*\w*\s+)?(.+?)(?:\s+for|\s+because|$)/i;
-    const match = message.match(requestPattern);
-
-    if (match && match[1]) {
-      const itemName = match[1].trim();
-
-      // Check if it's already in inventory
-      const existingChemical = await findChemicalFlexible(itemName);
-      const existingEquipment = await findEquipmentFlexible(itemName);
-
-      if (existingChemical) {
-        return `📦 **${existingChemical.name} is already in our inventory!**\n\n` +
-               `**Current Stock:** ${existingChemical.quantity} ${existingChemical.unit}\n` +
-               `**Location:** ${existingChemical.storage_location}\n` +
-               `**Expiry:** ${new Date(existingChemical.expiry_date).toLocaleDateString()}\n\n` +
-               `Would you still like to request additional quantity? If so, please specify how much you need.`;
-      }
-
-      if (existingEquipment) {
-        return `📦 **${existingEquipment.name} is already in our inventory!**\n\n` +
-               `**Location:** ${existingEquipment.location}\n` +
-               `**Condition:** ${existingEquipment.condition}\n\n` +
-               `Would you still like to request a replacement or additional unit?`;
-      }
-
-      // Item not in inventory - create purchase request
-      return `🛒 **Purchase Request Created**\n\n` +
-             `**Item:** ${itemName}\n` +
-             `**Requested by:** User ID ${userId}\n` +
-             `**Status:** Submitted for approval\n\n` +
-             `Your request has been submitted to lab management for approval. ` +
-             `You will be notified once it's reviewed. In the meantime, ` +
-             `would you like me to suggest alternative items that are currently available?`;
-    }
-
-    return "I can help you create a purchase request! Please specify what you'd like to request. For example: 'Request purchase of 500mL methanol'";
-  } catch (error) {
-    console.error('Purchase request query error:', error);
-    return "Sorry, I'm having trouble processing purchase requests right now.";
-  }
-}
-
-async function handleProtocolQuery(message) {
-  try {
-    const lowerMessage = message.toLowerCase();
-
-    // Common lab protocols and their requirements
-    const protocols = {
-      'titration': {
-        description: 'Acid-base titration procedure',
-        chemicals: ['standard solution', 'indicator', 'analyte'],
-        equipment: ['burette', 'pipette', 'beaker', 'magnetic stirrer']
-      },
-      'distillation': {
-        description: 'Separation by boiling point differences',
-        chemicals: ['mixture to separate'],
-        equipment: ['distillation apparatus', 'heating mantle', 'thermometer', 'condenser']
-      },
-      'extraction': {
-        description: 'Liquid-liquid extraction procedure',
-        chemicals: ['sample', 'solvent', 'extracting agent'],
-        equipment: ['separatory funnel', 'beaker', 'stirring rod']
-      },
-      'chromatography': {
-        description: 'Separation based on differential partitioning',
-        chemicals: ['mobile phase', 'stationary phase', 'sample'],
-        equipment: ['chromatography column', 'pump', 'detector']
-      },
-      'spectroscopy': {
-        description: 'Analysis using light absorption/emission',
-        chemicals: ['sample solution'],
-        equipment: ['spectrophotometer', 'cuvettes']
-      }
-    };
-
-    // Find matching protocol
-    let matchedProtocol = null;
-    for (const [key, protocol] of Object.entries(protocols)) {
-      if (lowerMessage.includes(key)) {
-        matchedProtocol = { name: key, ...protocol };
-        break;
-      }
-    }
-
-    if (matchedProtocol) {
-      let response = `🔬 **${matchedProtocol.name.charAt(0).toUpperCase() + matchedProtocol.name.slice(1)} Protocol**\n\n`;
-      response += `**Description:** ${matchedProtocol.description}\n\n`;
-
-      // Check available equipment
-      const availableEquipment = await getAvailableEquipment();
-      const requiredEquipment = matchedProtocol.equipment;
-      const availableRequired = availableEquipment.filter(eq =>
-        requiredEquipment.some(req => eq.name.toLowerCase().includes(req.toLowerCase()))
-      );
-
-      response += "**Required Equipment:**\n";
-      requiredEquipment.forEach(eq => {
-        const available = availableRequired.some(aeq => aeq.name.toLowerCase().includes(eq.toLowerCase()));
-        const status = available ? "✅ Available" : "❌ Not available";
-        response += `• ${eq} - ${status}\n`;
-      });
-
-      if (availableRequired.length < requiredEquipment.length) {
-        response += "\n⚠️ Some equipment may not be available. Consider booking in advance.\n";
-      }
-
-      response += "\n**Suggested Chemicals:**\n";
-      matchedProtocol.chemicals.forEach(chem => {
-        response += `• ${chem}\n`;
-      });
-
-      response += "\nWould you like me to check specific chemical availability or help with booking equipment?";
-
-      return response;
-    }
-
-    // General protocol assistance
-    return `🔬 **Lab Protocol Assistance**\n\n` +
-           `I can help with common lab protocols including:\n\n` +
-           `• **Titration** - Acid-base neutralization\n` +
-           `• **Distillation** - Separation by boiling points\n` +
-           `• **Extraction** - Liquid-liquid separation\n` +
-           `• **Chromatography** - Separation techniques\n` +
-           `• **Spectroscopy** - Light-based analysis\n\n` +
-           `Please specify which protocol you're interested in, and I'll provide:\n` +
-           `• Required equipment and availability\n` +
-           `• Suggested chemicals\n` +
-           `• Step-by-step guidance\n\n` +
-           `For example: "Suggest protocol for titration"`;
-  } catch (error) {
-    console.error('Protocol query error:', error);
-    return "Sorry, I'm having trouble accessing protocol information right now.";
-  }
-}
-
-async function handleSafetyCompatibilityQuery(message) {
-  try {
-    const lowerMessage = message.toLowerCase();
-
-    // Check for chemical compatibility queries
-    if (lowerMessage.includes('compatible') || lowerMessage.includes('mix')) {
-      return `🧪 **Chemical Compatibility Guidelines**\n\n` +
-             `**⚠️ Important Safety Rules:**\n\n` +
-             `**Never mix:**\n` +
-             `• Acids with bases (violent reaction)\n` +
-             `• Oxidizers with organics (fire hazard)\n` +
-             `• Water with certain metals (hydrogen gas)\n\n` +
-             `**Safe Storage Groups:**\n` +
-             `• Acids together (sulfuric, hydrochloric, nitric)\n` +
-             `• Bases together (sodium hydroxide, potassium hydroxide)\n` +
-             `• Organics together (alcohols, solvents)\n` +
-             `• Flammables in approved cabinets\n\n` +
-             `**Storage Conditions:**\n` +
-             `• Keep incompatible chemicals separate\n` +
-             `• Store in cool, dry, well-ventilated areas\n` +
-             `• Use secondary containment for liquids\n\n` +
-             `For specific chemical compatibility, please consult the Safety Data Sheet (SDS) or ask about particular chemicals.`;
-    }
-
-    // Check for storage queries
-    if (lowerMessage.includes('storage') || lowerMessage.includes('store')) {
-      const specialStorageChemicals = await getChemicalsRequiringSpecialStorage();
-
-      if (specialStorageChemicals.length > 0) {
-        let response = `📦 **Chemicals Requiring Special Storage**\n\n`;
-        specialStorageChemicals.slice(0, 5).forEach((chem, index) => {
-          response += `${index + 1}. **${chem.name}**\n`;
-          response += `   Storage: ${chem.storage_conditions}\n`;
-          if (chem.hazard_class) {
-            response += `   Hazard: ${chem.hazard_class}\n`;
-          }
-          response += `\n`;
-        });
-        response += `**General Storage Rules:**\n`;
-        response += `• Label all containers clearly\n`;
-        response += `• Store by compatibility groups\n`;
-        response += `• Keep away from heat sources\n`;
-        response += `• Use appropriate ventilation\n`;
-        return response;
-      }
-
-      return `📦 **Chemical Storage Guidelines**\n\n` +
-             `**Safe Storage Practices:**\n` +
-             `• Store chemicals in original containers when possible\n` +
-             `• Keep containers closed when not in use\n` +
-             `• Store in cool, dry, well-ventilated areas\n` +
-             `• Separate incompatible chemicals\n` +
-             `• Use secondary containment for liquids\n` +
-             `• Store flammables in approved cabinets\n\n` +
-             `For specific chemical storage requirements, check the Safety Data Sheet (SDS).`;
-    }
-
-    // Hazard information
-    if (lowerMessage.includes('hazard') || lowerMessage.includes('danger')) {
-      return `⚠️ **Chemical Hazard Classes**\n\n` +
-             `**Common Hazard Categories:**\n\n` +
-             `🔴 **Health Hazards:**\n` +
-             `• Toxic substances\n` +
-             `• Carcinogens\n` +
-             `• Reproductive toxins\n\n` +
-             `🟠 **Physical Hazards:**\n` +
-             `• Flammable liquids\n` +
-             `• Explosives\n` +
-             `• Corrosives\n\n` +
-             `🟡 **Environmental Hazards:**\n` +
-             `• Aquatic toxins\n` +
-             `• Ozone depleters\n\n` +
-             `For specific chemical hazards, please check the Safety Data Sheet (SDS) or ask about a particular chemical.`;
-    }
-
-    return `🛡️ **Safety & Compatibility Information**\n\n` +
-           `I can help with:\n\n` +
-           `• **Chemical compatibility** - Which chemicals can be safely mixed\n` +
-           `• **Storage guidelines** - How to store chemicals safely\n` +
-           `• **Hazard information** - Understanding chemical risks\n` +
-           `• **PPE requirements** - What protective equipment to use\n\n` +
-           `Please ask about a specific safety topic!`;
-  } catch (error) {
-    console.error('Safety compatibility query error:', error);
-    return "Sorry, I'm having trouble accessing safety information right now.";
-  }
-}
-
-// Helper function to extract search terms
-function extractSearchTerm(message, keywords) {
-  const lowerMessage = message.toLowerCase();
-  // Remove keywords from message to get search term
-  let searchTerm = lowerMessage;
-  keywords.forEach(keyword => {
-    searchTerm = searchTerm.replace(keyword, '');
-  });
-  return searchTerm.trim() || '';
-}
-
-// Enhanced function to find chemical by flexible name matching
-async function findChemicalFlexible(searchTerm) {
-  try {
-    // First try exact match
-    let chemical = await getChemicalByName(searchTerm);
-    if (chemical) return chemical;
-
-    // Try partial matches with different variations
-    const variations = [
-      searchTerm,
-      searchTerm.toLowerCase(),
-      searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1).toLowerCase(),
-      searchTerm.replace(/\s+/g, ''), // Remove spaces
-      searchTerm.replace(/[^a-zA-Z0-9]/g, '') // Remove special chars
-    ];
-
-    for (const variant of variations) {
-      if (variant !== searchTerm) {
-        chemical = await getChemicalByName(variant);
-        if (chemical) return chemical;
-      }
-    }
-
-    // Try searching with broader terms
-    const searchResults = await searchChemicals(searchTerm);
-    if (searchResults.length > 0) {
-      return searchResults[0]; // Return first match
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error in findChemicalFlexible:', error);
+    console.error('Error getting chemical by ID:', error);
     return null;
   }
 }
 
-// Enhanced function to find equipment by flexible name matching
-async function findEquipmentFlexible(searchTerm) {
+async function getEquipmentById(id) {
   try {
-    // First try exact match
-    let equipment = await getEquipmentByName(searchTerm);
-    if (equipment) return equipment;
-
-    // Try partial matches with different variations
-    const variations = [
-      searchTerm,
-      searchTerm.toLowerCase(),
-      searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1).toLowerCase(),
-      searchTerm.replace(/\s+/g, ''), // Remove spaces
-      searchTerm.replace(/[^a-zA-Z0-9]/g, '') // Remove special chars
-    ];
-
-    for (const variant of variations) {
-      if (variant !== searchTerm) {
-        equipment = await getEquipmentByName(variant);
-        if (equipment) return equipment;
-      }
-    }
-
-    // Try searching with broader terms
-    const searchResults = await searchEquipment(searchTerm);
-    if (searchResults.length > 0) {
-      return searchResults[0]; // Return first match
-    }
-
-    return null;
+    const equipment = await getEquipment();
+    return equipment.find(e => e.id === id);
   } catch (error) {
-    console.error('Error in findEquipmentFlexible:', error);
+    console.error('Error getting equipment by ID:', error);
     return null;
   }
 }
 
-// Contextual follow-up handler for conversational intelligence
-async function handleContextualFollowUp(message, context, conversationId) {
-  try {
-    const lowerMessage = message.toLowerCase();
-
-    // Handle yes/no follow-ups
-    if (context.pending_action) {
-      if (lowerMessage.includes('yes') || lowerMessage.includes('sure') || lowerMessage.includes('okay') || lowerMessage.includes('ok')) {
-        return await handleAffirmativeResponse(context, conversationId);
-      } else if (lowerMessage.includes('no') || lowerMessage.includes('never') || lowerMessage.includes('not now')) {
-        return await handleNegativeResponse(context, conversationId);
-      }
-    }
-
-    // Handle clarification requests
-    if (context.awaiting_clarification) {
-      return await handleClarificationResponse(message, context, conversationId);
-    }
-
-    // Handle follow-up questions about previous topics
-    if (context.last_chemical) {
-      const chemicalFollowUps = ['safety', 'storage', 'properties', 'availability', 'location', 'expiry', 'alternatives'];
-      for (const followUp of chemicalFollowUps) {
-        if (lowerMessage.includes(followUp)) {
-          return await handleChemicalFollowUp(context.last_chemical, followUp, conversationId);
-        }
-      }
-    }
-
-    if (context.last_equipment) {
-      const equipmentFollowUps = ['book', 'reserve', 'schedule', 'maintenance', 'specs', 'manual', 'calibration'];
-      for (const followUp of equipmentFollowUps) {
-        if (lowerMessage.includes(followUp)) {
-          return await handleEquipmentFollowUp(context.last_equipment, followUp, conversationId);
-        }
-      }
-    }
-
-    // Handle quantity specifications for purchases or borrowings
-    if (context.awaiting_quantity && (lowerMessage.match(/\d+/) || lowerMessage.includes('all'))) {
-      return await handleQuantityResponse(message, context, conversationId);
-    }
-
-    return null; // No contextual response needed
-  } catch (error) {
-    console.error('Contextual follow-up error:', error);
-    return null;
-  }
-}
-
-// Helper functions for contextual responses
-async function handleAffirmativeResponse(context, conversationId) {
-  try {
-    if (context.pending_action === 'book_equipment') {
-      const equipment = await findEquipmentFlexible(context.equipment_name);
-      if (equipment) {
-        await setConversationContext(conversationId, 'awaiting_booking_details', 'true');
-        return `Great! I'd be happy to help you book the ${equipment.name}.\n\nPlease provide:\n• Date you need it (e.g., "tomorrow" or "2024-01-15")\n• Time you need it (e.g., "2 PM")\n• How long you need it (e.g., "2 hours" or "until 5 PM")`;
-      }
-    }
-
-    if (context.pending_action === 'request_purchase') {
-      await setConversationContext(conversationId, 'awaiting_quantity', 'true');
-      return `Perfect! How much ${context.item_name} would you like to request? Please specify the quantity and unit (e.g., "500 mL" or "2 kg").`;
-    }
-
-    if (context.pending_action === 'show_alternatives') {
-      const alternatives = await findAlternatives(context.original_item, context.item_type);
-      if (alternatives.length > 0) {
-        let response = `Here are some alternatives to ${context.original_item}:\n\n`;
-        alternatives.forEach((item, index) => {
-          response += `${index + 1}. ${item.name} - ${item.quantity || 'Available'} ${item.unit || ''}\n`;
-        });
-        response += `\nWould you like details about any of these alternatives?`;
-        return response;
-      }
-    }
-
-    await clearConversationContext(conversationId, 'pending_action');
-    return "I'm not sure what you meant. Could you please clarify?";
-  } catch (error) {
-    console.error('Affirmative response error:', error);
-    return "Sorry, I encountered an error processing your response.";
-  }
-}
-
-async function handleNegativeResponse(context, conversationId) {
-  try {
-    await clearConversationContext(conversationId, 'pending_action');
-    return "No problem! Is there anything else I can help you with?";
-  } catch (error) {
-    console.error('Negative response error:', error);
-    return "Sorry, I encountered an error processing your response.";
-  }
-}
-
-async function handleClarificationResponse(message, context, conversationId) {
-  try {
-    // Process the clarification and retry the original query
-    await clearConversationContext(conversationId, 'awaiting_clarification');
-
-    if (context.original_query_type === 'chemical_details') {
-      return await handleChemicalDetailsQuery(message);
-    } else if (context.original_query_type === 'equipment_details') {
-      return await handleEquipmentDetailsQuery(message);
-    }
-
-    return "Thanks for the clarification! Let me help you with that.";
-  } catch (error) {
-    console.error('Clarification response error:', error);
-    return "Sorry, I encountered an error processing your clarification.";
-  }
-}
-
-async function handleChemicalFollowUp(chemicalName, followUpType, conversationId) {
-  try {
-    const chemical = await findChemicalFlexible(chemicalName);
-    if (!chemical) {
-      return `I can't find the chemical ${chemicalName} anymore. Could you please specify which chemical you're referring to?`;
-    }
-
-    switch (followUpType) {
-      case 'safety':
-        return `🛡️ **Safety Information for ${chemical.name}**\n\n` +
-               `**Hazard Class:** ${chemical.hazard_class || 'Not specified'}\n` +
-               `**Safety Precautions:** ${chemical.safety_precautions || 'Check SDS for details'}\n` +
-               `**Storage Conditions:** ${chemical.storage_conditions || 'Standard chemical storage'}\n` +
-               `**PPE Required:** ${chemical.safety_info || 'Lab coat, gloves, safety goggles'}`;
-
-      case 'storage':
-        return `📦 **Storage Information for ${chemical.name}**\n\n` +
-               `**Location:** ${chemical.storage_location}\n` +
-               `**Storage Conditions:** ${chemical.storage_conditions || 'Cool, dry place'}\n` +
-               `**Expiry Date:** ${new Date(chemical.expiry_date).toLocaleDateString()}`;
-
-      case 'properties':
-        let response = `🔬 **Properties of ${chemical.name}**\n\n`;
-        if (chemical.molecular_formula) response += `• **Formula:** ${chemical.molecular_formula}\n`;
-        if (chemical.molecular_weight) response += `• **Molecular Weight:** ${chemical.molecular_weight} g/mol\n`;
-        if (chemical.physical_state) response += `• **State:** ${chemical.physical_state}\n`;
-        if (chemical.density) response += `• **Density:** ${chemical.density} g/cm³\n`;
-        if (chemical.melting_point) response += `• **Melting Point:** ${chemical.melting_point}\n`;
-        if (chemical.boiling_point) response += `• **Boiling Point:** ${chemical.boiling_point}\n`;
-        return response;
-
-      case 'availability':
-        return `📊 **Availability of ${chemical.name}**\n\n` +
-               `**Current Stock:** ${chemical.quantity} ${chemical.unit}\n` +
-               `**Location:** ${chemical.storage_location}\n` +
-               `**Expiry:** ${new Date(chemical.expiry_date).toLocaleDateString()}`;
-
-      default:
-        return `What specific information about ${chemical.name} would you like to know?`;
-    }
-  } catch (error) {
-    console.error('Chemical follow-up error:', error);
-    return "Sorry, I encountered an error retrieving that information.";
-  }
-}
-
-async function handleEquipmentFollowUp(equipmentName, followUpType, conversationId) {
-  try {
-    const equipment = await findEquipmentFlexible(equipmentName);
-    if (!equipment) {
-      return `I can't find the equipment ${equipmentName} anymore. Could you please specify which equipment you're referring to?`;
-    }
-
-    switch (followUpType) {
-      case 'book':
-      case 'reserve':
-      case 'schedule':
-        await setConversationContext(conversationId, 'pending_action', 'book_equipment');
-        await setConversationContext(conversationId, 'equipment_name', equipment.name);
-        return `Would you like me to help you book the ${equipment.name}?`;
-
-      case 'maintenance':
-        const daysSinceMaintenance = Math.floor((new Date() - new Date(equipment.last_maintenance_date)) / (1000 * 60 * 60 * 24));
-        return `🔧 **Maintenance Info for ${equipment.name}**\n\n` +
-               `**Last Maintenance:** ${new Date(equipment.last_maintenance_date).toLocaleDateString()}\n` +
-               `**Days Since:** ${daysSinceMaintenance}\n` +
-               `**Schedule:** Every ${equipment.maintenance_schedule} days\n` +
-               `**Next Due:** ${new Date(Date.now() + (equipment.maintenance_schedule - daysSinceMaintenance) * 24 * 60 * 60 * 1000).toLocaleDateString()}`;
-
-      case 'specs':
-        return `📋 **Specifications for ${equipment.name}**\n\n` +
-               `**Category:** ${equipment.category}\n` +
-               `**Condition:** ${equipment.condition}\n` +
-               `**Location:** ${equipment.location}\n` +
-               `${equipment.serial_number ? `**Serial:** ${equipment.serial_number}\n` : ''}` +
-               `${equipment.manufacturer ? `**Manufacturer:** ${equipment.manufacturer}\n` : ''}` +
-               `${equipment.model ? `**Model:** ${equipment.model}\n` : ''}`;
-
-      default:
-        return `What specific information about ${equipment.name} would you like to know?`;
-    }
-  } catch (error) {
-    console.error('Equipment follow-up error:', error);
-    return "Sorry, I encountered an error retrieving that information.";
-  }
-}
-
-async function handleQuantityResponse(message, context, conversationId) {
-  try {
-    const quantityMatch = message.match(/(\d+(?:\.\d+)?)\s*(\w+)/);
-    if (quantityMatch) {
-      const quantity = quantityMatch[1];
-      const unit = quantityMatch[2];
-
-      await clearConversationContext(conversationId, 'awaiting_quantity');
-
-      if (context.pending_action === 'request_purchase') {
-        return `🛒 **Purchase Request Updated**\n\n` +
-               `**Item:** ${context.item_name}\n` +
-               `**Quantity:** ${quantity} ${unit}\n` +
-               `**Status:** Submitted for approval\n\n` +
-               `Your purchase request has been submitted. You'll be notified once it's reviewed.`;
-      }
-    }
-
-    return "I didn't understand the quantity. Please specify it clearly (e.g., '500 mL' or '2 kg').";
-  } catch (error) {
-    console.error('Quantity response error:', error);
-    return "Sorry, I encountered an error processing the quantity.";
-  }
-}
-
-async function findAlternatives(originalItem, itemType) {
-  try {
-    if (itemType === 'chemical') {
-      const chemicals = await searchChemicalsAdvanced(originalItem);
-      return chemicals.filter(chem => chem.name.toLowerCase() !== originalItem.toLowerCase()).slice(0, 3);
-    } else if (itemType === 'equipment') {
-      const equipment = await searchEquipmentAdvanced(originalItem);
-      return equipment.filter(eq => eq.name.toLowerCase() !== originalItem.toLowerCase()).slice(0, 3);
-    }
-    return [];
-  } catch (error) {
-    console.error('Find alternatives error:', error);
-    return [];
-  }
-}
-
+// Export all functions
 module.exports = {
   processChatMessage,
-  handleChemicalDetailsQuery,
-  handleEquipmentDetailsQuery,
   handleChemicalQuery,
   handleEquipmentQuery,
   handleBorrowingRequest,
-  handleBorrowingStatus,
   handleScheduleQuery,
   handleSafetyQuery,
-  handleHistoryQuery,
-  handleHelpQuery,
-  handleInventoryAlertsQuery,
-  handleMaintenanceQuery,
-  handleEquipmentBookingQuery,
-  handlePurchaseRequestQuery,
-  handleProtocolQuery,
-  handleSafetyCompatibilityQuery,
-  handleContextualFollowUp,
-  findChemicalFlexible,
-  findEquipmentFlexible
+  handleInventoryAlerts,
+  handleMaintenanceStatus,
+  generateHelpResponse,
+  generateIntelligentDefault
 };
