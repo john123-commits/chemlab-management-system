@@ -802,6 +802,39 @@ class ApiService {
     }
   }
 
+  // Delete borrowing request - Admin/Technician only
+  static Future<Map<String, dynamic>> deleteBorrowing(int borrowingId) async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    logger.d('=== API SERVICE DELETE BORROWING ===');
+    logger.d('Borrowing ID: $borrowingId');
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/borrowings/$borrowingId'),
+      headers: getHeaders(token),
+    );
+
+    logger.d('Delete borrowing response status: ${response.statusCode}');
+    logger.d('Delete borrowing response body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      logger.d('Borrowing deleted successfully: ${data['message']}');
+      return data;
+    } else if (response.statusCode == 403) {
+      throw Exception(
+          'Permission denied: You do not have permission to delete this request');
+    } else if (response.statusCode == 404) {
+      throw Exception('Borrowing not found or cannot be deleted');
+    } else {
+      logger.e('Failed to delete borrowing: ${response.body}');
+      throw Exception('Failed to delete borrowing: ${response.body}');
+    }
+  }
+
   // ✅ CHATBOT METHODS - Fixed and properly integrated
 
   static Future<List<dynamic>> getChatQuickActions(String userRole) async {

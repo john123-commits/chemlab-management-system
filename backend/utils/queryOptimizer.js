@@ -42,24 +42,31 @@ class QueryCache {
       // Remove oldest entry
       const firstKey = this.cache.keys().next().value;
       this.cache.delete(firstKey);
+      console.log(`[CACHE] Evicted oldest entry from ${this.constructor.name}`);
     }
 
     this.cache.set(key, {
       value,
       timestamp: Date.now()
     });
+    console.log(`[CACHE] Set ${key} in ${this.constructor.name} (size: ${this.cache.size})`);
   }
 
   get(key) {
     const entry = this.cache.get(key);
-    if (!entry) return null;
+    if (!entry) {
+      console.log(`[CACHE] Miss for ${key} in ${this.constructor.name}`);
+      return null;
+    }
 
     // Check if entry has expired
     if (Date.now() - entry.timestamp > this.ttl) {
       this.cache.delete(key);
+      console.log(`[CACHE] Expired ${key} in ${this.constructor.name}`);
       return null;
     }
 
+    console.log(`[CACHE] Hit for ${key} in ${this.constructor.name}`);
     return entry.value;
   }
 

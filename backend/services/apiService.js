@@ -46,6 +46,55 @@ async function getChemicalByName(name) {
     return null;
   }
 }
+function classifyQueryType(message) {
+  if (!message) return 'general';
+  
+  const lowerMsg = message.toLowerCase();
+  
+  // Chemical-related queries
+  if (lowerMsg.includes('chemical') || lowerMsg.includes('reagent') || 
+      lowerMsg.includes('compound') || lowerMsg.includes('solution')) {
+    return 'chemical_inquiry';
+  }
+  
+  // Equipment-related queries
+  if (lowerMsg.includes('equipment') || lowerMsg.includes('instrument') || 
+      lowerMsg.includes('device') || lowerMsg.includes('apparatus')) {
+    return 'equipment_inquiry';
+  }
+  
+  // Safety-related queries
+  if (lowerMsg.includes('safety') || lowerMsg.includes('hazard') || 
+      lowerMsg.includes('ppe') || lowerMsg.includes('spill')) {
+    return 'safety_query';
+  }
+  
+  // Borrowing/request queries
+  if (lowerMsg.includes('borrow') || lowerMsg.includes('request') || 
+      lowerMsg.includes('book') || lowerMsg.includes('reserve')) {
+    return 'borrowing_request';
+  }
+  
+  // Schedule queries
+  if (lowerMsg.includes('schedule') || lowerMsg.includes('when') || 
+      lowerMsg.includes('booking') || lowerMsg.includes('time')) {
+    return 'schedule_query';
+  }
+  
+  // Inventory/status queries
+  if (lowerMsg.includes('available') || lowerMsg.includes('stock') || 
+      lowerMsg.includes('inventory') || lowerMsg.includes('status')) {
+    return 'inventory_query';
+  }
+  
+  // Help queries
+  if (lowerMsg.includes('help') || lowerMsg.includes('what can')) {
+    return 'help_request';
+  }
+  
+  return 'general';
+}
+
 
 // Search chemicals function (optimized)
 async function searchChemicals(searchTerm) {
@@ -496,16 +545,40 @@ async function getEquipmentBookings(equipmentId, limit = 10) {
   }
 }
 
-// Audit logging functions
-async function logChatbotQuery(userId, query, response, queryType) {
+async function logChatbotQuery(userId, query, responseType, queryType) {
   try {
-    await pool.query(`
-      INSERT INTO chatbot_audit_log (user_id, query_text, response_text, query_type, created_at)
-      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-    `, [userId, query, response, queryType]);
+    // Ensure queryType is never null or undefined
+    const safeQueryType = queryType || 'general';
+    
+    // Validate that all required parameters are present
+    if (!userId || !query || !responseType) {
+      console.error('Missing required parameters for logging:', { userId, query: !!query, responseType });
+      return; // Don't throw, just return to prevent breaking the flow
+    }
+
+    // Log the insertion for debugging
+    console.log(`[DB] Inserting chatbot log: userId=${userId}, responseType=${responseType}, queryType=${safeQueryType}`);
+
+    // CORRECTED: Use the actual column names from your database table
+    const result = await pool.query(
+      `INSERT INTO chatbot_audit_log (user_id, query, response_type, query_type, created_at) 
+       VALUES ($1, $2, $3, $4, NOW()) 
+       RETURNING id`,
+      [userId, query, responseType, safeQueryType]
+    );
+
+    console.log(`[DB] Successfully logged chatbot query with ID: ${result.rows[0].id}`);
+    
   } catch (error) {
     console.error('Database error in logChatbotQuery:', error);
-    // Don't throw error for logging failures
+    console.error('Parameters were:', { 
+      userId, 
+      query: query?.substring(0, 50) + '...', 
+      responseType, 
+      queryType 
+    });
+    
+    // Don't throw the error to prevent breaking the main chat flow
   }
 }
 
@@ -674,5 +747,6 @@ module.exports = {
   createBorrowing,
   getChemicalById,
   getEquipmentById,
-  getUserById
+  getUserById,
+  classifyQueryType 
 };

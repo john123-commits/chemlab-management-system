@@ -468,6 +468,47 @@ class Borrowing {
       return [];
     }
   }
+
+  // Delete borrowing request - only for pending or rejected requests
+  static async deleteById(id, deletedByUserId, deletedByRole) {
+    try {
+      console.log('Attempting to delete borrowing:', { id, deletedByUserId, deletedByRole });
+      
+      // First check if the borrowing exists and its status
+      const borrowing = await this.findById(id);
+      if (!borrowing) {
+        return null;
+      }
+      
+      // Only allow deletion of pending or rejected requests
+      if (!['pending', 'rejected'].includes(borrowing.status)) {
+        throw new Error('Cannot delete approved or returned borrowing requests');
+      }
+      
+      // Check if the deleter has permission
+      if (borrowing.borrower_id !== deletedByUserId &&
+          deletedByRole !== 'admin' && deletedByRole !== 'technician') {
+        throw new Error('Permission denied: insufficient role to delete this request');
+      }
+      
+      const result = await db.query(
+        `DELETE FROM borrowings
+         WHERE id = $1
+         RETURNING *`,
+        [id]
+      );
+      
+      if (result.rows.length === 0) {
+        return null;
+      }
+      
+      console.log('Successfully deleted borrowing:', result.rows[0].id);
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error in Borrowing.deleteById:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Borrowing;

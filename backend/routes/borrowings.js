@@ -215,4 +215,42 @@ router.get('/active', authenticateToken, requireAdminOrTechnician, async (req, r
   }
 });
 
+// Delete borrowing request - Admin/Technician only for pending/rejected requests
+router.delete('/:id', authenticateToken, requireAdminOrTechnician, async (req, res) => {
+  try {
+    const borrowingId = req.params.id;
+    const deletedByUserId = req.user.userId;
+    const deletedByRole = req.user.role;
+    
+    console.log('Delete request received:', { borrowingId, deletedByUserId, deletedByRole });
+    
+    // Delete the borrowing using the model method
+    const deletedBorrowing = await Borrowing.deleteById(borrowingId, deletedByUserId, deletedByRole);
+    
+    if (!deletedBorrowing) {
+      return res.status(404).json({ error: 'Borrowing not found or cannot be deleted' });
+    }
+    
+    console.log('Successfully deleted borrowing:', deletedBorrowing.id);
+    res.json({
+      message: 'Borrowing request deleted successfully',
+      deletedBorrowing: {
+        id: deletedBorrowing.id,
+        borrower_name: deletedBorrowing.borrower_name,
+        status: deletedBorrowing.status,
+        created_at: deletedBorrowing.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting borrowing:', error);
+    if (error.message.includes('Cannot delete approved or returned')) {
+      return res.status(400).json({ error: 'Cannot delete approved or returned borrowing requests' });
+    }
+    if (error.message.includes('Permission denied')) {
+      return res.status(403).json({ error: 'Permission denied: insufficient role to delete this request' });
+    }
+    res.status(500).json({ error: `Failed to delete borrowing request: ${error.message}` });
+  }
+});
+
 module.exports = router;

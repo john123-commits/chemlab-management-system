@@ -84,8 +84,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       for (var item in equipment) {
         print('Equipment: ${item.name}, Condition: ${item.condition}');
-        final condition = item.condition ??
-            'Unknown'; // Use dot notation instead of ['condition']
+        final condition =
+            item.condition; // Use dot notation instead of ['condition']
         conditionCounts[condition] = (conditionCounts[condition] ?? 0) + 1;
       }
 
@@ -369,8 +369,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                       SizedBox(
                                         height: 250,
                                         child: SfCartesianChart(
-                                          primaryXAxis: CategoryAxis(),
-                                          primaryYAxis: NumericAxis(minimum: 0),
+                                          primaryXAxis: const CategoryAxis(),
+                                          primaryYAxis:
+                                              const NumericAxis(minimum: 0),
                                           title: const ChartTitle(
                                               text: 'Equipment by Condition'),
                                           legend:

@@ -1106,25 +1106,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Backward compatibility method
-  Widget _buildSummaryCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color, {
-    bool fullWidth = false,
-  }) {
-    return _buildEnhancedSummaryCard(
-      title,
-      value,
-      icon,
-      color,
-      fullWidth: fullWidth,
-      healthStatus: 'good',
-      healthPercentage: 85.0, // Default healthy percentage
-    );
-  }
-
   // Enhanced alerts with priority-based visual hierarchy
   List<Widget> _buildPrioritizedAlerts() {
     if (_alerts == null || _alerts!.isEmpty) return [];

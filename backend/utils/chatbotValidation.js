@@ -253,15 +253,18 @@ async function validateEquipmentId(equipmentId) {
  */
 function validateMessage(message) {
   if (!message || typeof message !== 'string') {
+    console.warn('[VALIDATION] Invalid message type or missing:', { type: typeof message, value: message });
     throw new ValidationError('Message is required and must be a string', 'message');
   }
 
   const trimmed = message.trim();
   if (trimmed.length === 0) {
+    console.warn('[VALIDATION] Empty message received');
     throw new ValidationError('Message cannot be empty', 'message');
   }
 
   if (trimmed.length > 1000) {
+    console.warn('[VALIDATION] Message too long:', { length: trimmed.length });
     throw new ValidationError('Message is too long (max 1000 characters)', 'message');
   }
 
@@ -298,12 +301,24 @@ function sanitizeInput(input) {
     return input;
   }
 
-  return input
+  const original = input;
+  const sanitized = input
     .replace(/</g, '<')
     .replace(/>/g, '>')
     .replace(/"/g, '"')
     .replace(/'/g, '&#x27;')
     .replace(/\//g, '&#x2F;');
+
+  // Log if sanitization changed the input (potential security issue)
+  if (original !== sanitized) {
+    console.warn('[SECURITY] Input sanitization modified content:', {
+      originalLength: original.length,
+      sanitizedLength: sanitized.length,
+      changes: original !== sanitized
+    });
+  }
+
+  return sanitized;
 }
 
 /**

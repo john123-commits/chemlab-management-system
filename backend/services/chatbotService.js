@@ -50,6 +50,7 @@ const {
 
 // Main message processor
 async function processChatMessage(message, userId, userRole) {
+  const startTime = Date.now();
   try {
     // Input validation
     validateMessage(message);
@@ -58,6 +59,9 @@ async function processChatMessage(message, userId, userRole) {
 
     const sanitizedMessage = sanitizeInput(message);
     const lowerMessage = sanitizedMessage.toLowerCase();
+
+    // Log input validation
+    console.log(`[VALIDATION] Message processed - User: ${userId}, Role: ${userRole}, Length: ${message.length}`);
 
     // Get conversation context
     const conversation = await getOrCreateConversation(userId);
@@ -76,11 +80,15 @@ async function processChatMessage(message, userId, userRole) {
     
     // Log response
     await logQuery(userId, sanitizedMessage, response, 'assistant_response');
-    
+
+    // Log performance
+    console.log(`[PERF] Chat message processed in ${Date.now() - startTime}ms - User: ${userId}`);
+
     return response;
 
   } catch (error) {
     console.error('Message processing error:', error);
+    console.log(`[PERF] Chat message failed after ${Date.now() - startTime}ms - User: ${userId}, Error: ${error.message}`);
     const errorResponse = createErrorResponse(error, 'I encountered an error. Please try again.');
     await logQuery(userId, message, errorResponse, 'error');
     return errorResponse;
@@ -95,16 +103,43 @@ async function routeMessage(lowerMessage, originalMessage, userId, userRole, con
     if (contextualResponse) return contextualResponse;
   }
 
-  // Priority 2: Specific queries about chemicals/equipment
-  if (containsChemicalQuery(lowerMessage)) {
+  // Enhanced intent detection with confidence scoring
+  const intent = await analyzeMessageIntent(lowerMessage, originalMessage);
+  
+  console.log(`[INTENT] Detected: ${intent.type} (confidence: ${intent.confidence})`);
+  
+  // Route based on intent with fallback to your existing logic
+  if (intent.confidence > 0.6) {
+    switch (intent.type) {
+      case 'chemical_query':
+        return await handleChemicalQuery(originalMessage, userId, conversation?.id);
+      case 'equipment_query':
+        return await handleEquipmentQuery(originalMessage, userId, conversation?.id);
+      case 'borrowing_request':
+        return await handleBorrowingRequest(originalMessage, userId, userRole);
+      case 'schedule_query':
+        return await handleScheduleQuery(originalMessage, userId);
+      case 'safety_query':
+        return await handleSafetyQuery(originalMessage);
+      case 'inventory_alert':
+        return await handleInventoryAlerts();
+      case 'maintenance_query':
+        return await handleMaintenanceStatus();
+      case 'help_request':
+        return await generateHelpResponse(userId, userRole);
+    }
+  }
+
+
+  // Fallback to your existing detection methods
+  if (await containsChemicalQuery(lowerMessage)) {
     return await handleChemicalQuery(originalMessage, userId, conversation?.id);
   }
 
-  if (containsEquipmentQuery(lowerMessage)) {
+  if (await containsEquipmentQuery(lowerMessage)) {
     return await handleEquipmentQuery(originalMessage, userId, conversation?.id);
   }
 
-  // Priority 3: Action requests
   if (containsBorrowingRequest(lowerMessage)) {
     return await handleBorrowingRequest(originalMessage, userId, userRole);
   }
@@ -117,7 +152,6 @@ async function routeMessage(lowerMessage, originalMessage, userId, userRole, con
     return await handleSafetyQuery(originalMessage);
   }
 
-  // Priority 4: Status and information queries
   if (containsInventoryAlert(lowerMessage)) {
     return await handleInventoryAlerts();
   }
@@ -126,7 +160,6 @@ async function routeMessage(lowerMessage, originalMessage, userId, userRole, con
     return await handleMaintenanceStatus();
   }
 
-  // Priority 5: Help and default
   if (lowerMessage.includes('help') || lowerMessage.includes('what can')) {
     return await generateHelpResponse(userId, userRole);
   }
@@ -135,42 +168,150 @@ async function routeMessage(lowerMessage, originalMessage, userId, userRole, con
   return await generateIntelligentDefault(userId, userRole);
 }
 
+async function analyzeMessageIntent(lowerMessage, originalMessage) {
+  const intents = [];
+  
+  // Database-first chemical query detection
+  const chemicalScore = await calculateDatabaseChemicalScore(lowerMessage, originalMessage);
+  if (chemicalScore > 0) intents.push({ type: 'chemical_query', confidence: chemicalScore });
+  
+  // Database-first equipment query detection
+  const equipmentScore = await calculateDatabaseEquipmentScore(lowerMessage, originalMessage);
+  if (equipmentScore > 0) intents.push({ type: 'equipment_query', confidence: equipmentScore });
+  
+  // Keep existing logic for other intent types (borrowing, safety, etc.)
+  const borrowingScore = calculateIntentScore(lowerMessage, {
+    keywords: ['borrow', 'request', 'need', 'get', 'take', 'obtain'],
+    actions: ['can i', 'i want to', 'i need', 'how to', 'submit'],
+    weight: 1.2
+  });
+  if (borrowingScore > 0) intents.push({ type: 'borrowing_request', confidence: borrowingScore });
+  
+  const safetyScore = calculateIntentScore(lowerMessage, {
+    keywords: ['safety', 'hazard', 'ppe', 'spill', 'emergency', 'danger', 'toxic', 'protective'],
+    actions: ['what to do', 'how to handle', 'procedure', 'protocol', 'guidelines'],
+    weight: 1.3
+  });
+  if (safetyScore > 0) intents.push({ type: 'safety_query', confidence: safetyScore });
+  
+  // Return highest confidence intent or default
+  if (intents.length === 0) {
+    return { type: 'default', confidence: 0 };
+  }
+  
+  return intents.reduce((max, current) => 
+    current.confidence > max.confidence ? current : max
+  );
+}
+
+// ADD this helper function for calculating intent scores
+function calculateIntentScore(message, pattern) {
+  let score = 0;
+  
+  // Check for keyword matches
+  const keywordMatches = pattern.keywords.filter(keyword => 
+    message.includes(keyword)
+  ).length;
+  
+  // Check for action matches
+  const actionMatches = pattern.actions.filter(action => 
+    message.includes(action)
+  ).length;
+  
+  // Base score calculation
+  if (keywordMatches > 0) {
+    score += (keywordMatches / pattern.keywords.length) * 0.6;
+  }
+  
+  if (actionMatches > 0) {
+    score += (actionMatches / pattern.actions.length) * 0.4;
+  }
+  
+  // Apply pattern weight
+  score *= pattern.weight;
+  
+  // Bonus for multiple matches
+  if (keywordMatches > 1 || actionMatches > 1) {
+    score *= 1.2;
+  }
+  
+  return Math.min(score, 1.0); // Cap at 1.0
+}
+
+
+function classifyQueryType(message) {
+  if (!message) return 'general';
+  
+  const lowerMsg = message.toLowerCase();
+  
+  // Chemical-related queries
+  if (lowerMsg.includes('chemical') || lowerMsg.includes('reagent') || 
+      lowerMsg.includes('compound') || lowerMsg.includes('solution')) {
+    return 'chemical_inquiry';
+  }
+  
+  // Equipment-related queries
+  if (lowerMsg.includes('equipment') || lowerMsg.includes('instrument') || 
+      lowerMsg.includes('device') || lowerMsg.includes('apparatus')) {
+    return 'equipment_inquiry';
+  }
+  
+  // Safety-related queries
+  if (lowerMsg.includes('safety') || lowerMsg.includes('hazard') || 
+      lowerMsg.includes('ppe') || lowerMsg.includes('spill')) {
+    return 'safety_query';
+  }
+  
+  // Borrowing/request queries
+  if (lowerMsg.includes('borrow') || lowerMsg.includes('request') || 
+      lowerMsg.includes('book') || lowerMsg.includes('reserve')) {
+    return 'borrowing_request';
+  }
+  
+  // Schedule queries
+  if (lowerMsg.includes('schedule') || lowerMsg.includes('when') || 
+      lowerMsg.includes('booking') || lowerMsg.includes('time')) {
+    return 'schedule_query';
+  }
+  
+  // Inventory/status queries
+  if (lowerMsg.includes('available') || lowerMsg.includes('stock') || 
+      lowerMsg.includes('inventory') || lowerMsg.includes('status')) {
+    return 'inventory_query';
+  }
+  
+  // Help queries
+  if (lowerMsg.includes('help') || lowerMsg.includes('what can')) {
+    return 'help_request';
+  }
+  
+  return 'general';
+}
+
 // Query type detection helpers
-function containsChemicalQuery(message) {
-  const chemicalKeywords = ['chemical', 'reagent', 'compound', 'substance', 'solution'];
-  const actionKeywords = ['what is', 'tell me about', 'details', 'info', 'properties', 'available', 'stock'];
+async function containsChemicalQuery(message) {
+  const actionKeywords = ['what is', 'tell me about', 'details', 'info', 'properties', 'available', 'stock', 'find', 'show me'];
+  const hasAction = actionKeywords.some(action => message.includes(action));
   
-  return chemicalKeywords.some(keyword => message.includes(keyword)) &&
-         actionKeywords.some(action => message.includes(action));
-}
-
-function containsEquipmentQuery(message) {
-  const equipmentKeywords = ['equipment', 'instrument', 'device', 'apparatus', 'machine'];
-  const actionKeywords = ['what is', 'tell me about', 'details', 'spec', 'available', 'book'];
+  if (!hasAction) return false;
   
-  return equipmentKeywords.some(keyword => message.includes(keyword)) &&
-         actionKeywords.some(action => message.includes(action));
-}
-
-function containsBorrowingRequest(message) {
-  return message.includes('borrow') || message.includes('request') || message.includes('need');
-}
-
-function containsScheduleQuery(message) {
-  return message.includes('schedule') || message.includes('booking') || message.includes('when');
-}
-
-function containsSafetyQuery(message) {
-  return message.includes('safety') || message.includes('hazard') || message.includes('ppe') || 
-         message.includes('spill') || message.includes('emergency');
-}
-
-function containsInventoryAlert(message) {
-  return message.includes('low stock') || message.includes('expiring') || message.includes('expired');
-}
-
-function containsMaintenanceQuery(message) {
-  return message.includes('maintenance') || message.includes('calibration') || message.includes('service');
+  // Extract potential chemical name from the message
+  const potentialChemicalName = extractChemicalName(message);
+  
+  if (potentialChemicalName) {
+    // Check if this name exists in the database
+    try {
+      const chemical = await findChemicalInDatabase(potentialChemicalName);
+      return chemical !== null; // Return true if found in database
+    } catch (error) {
+      console.error('Database check error in containsChemicalQuery:', error);
+      return false;
+    }
+  }
+  
+  // Also check for generic chemical queries
+  const chemicalKeywords = ['chemical', 'chemicals', 'reagent', 'compound', 'substance', 'solution'];
+  return chemicalKeywords.some(keyword => message.includes(keyword));
 }
 
 // Enhanced chemical query handler
@@ -507,25 +648,34 @@ async function generateEquipmentOverview() {
              `• Check chemical availability instead`;
     }
     
-    const available = equipment.filter(e => e.status === 'available');
-    const inUse = equipment.filter(e => e.status === 'in_use');
-    const maintenance = equipment.filter(e => e.status === 'maintenance');
-    
     let response = `⚙️ **Equipment Inventory Overview**\n\n`;
-    response += `Total equipment: ${equipment.length}\n`;
-    response += `• Available: ${available.length}\n`;
-    response += `• In use: ${inUse.length}\n`;
-    response += `• Under maintenance: ${maintenance.length}\n\n`;
+    response += `Total equipment: ${equipment.length}\n\n`;
     
-    if (available.length > 0) {
-      response += `**Available Equipment:**\n`;
-      available.slice(0, 5).forEach((eq, index) => {
-        response += `${index + 1}. ${eq.name} - ${eq.location}\n`;
-      });
+    // Show ALL equipment with their actual status from database
+    response += `**All Equipment:**\n`;
+    equipment.slice(0, 10).forEach((eq, index) => {
+      const status = eq.status || 'unknown status';
+      const location = eq.location || 'location not specified';
+      response += `${index + 1}. **${eq.name}**\n`;
+      response += `   • Status: ${status}\n`;
+      response += `   • Location: ${location}\n`;
+      if (eq.category) response += `   • Category: ${eq.category}\n`;
       response += `\n`;
-    }
+    });
     
-    response += `**To get specific information:**\n`;
+    // Group by actual status values from database
+    const statusCounts = {};
+    equipment.forEach(eq => {
+      const status = eq.status || 'unknown';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+    
+    response += `**Status Summary:**\n`;
+    Object.entries(statusCounts).forEach(([status, count]) => {
+      response += `• ${status}: ${count}\n`;
+    });
+    
+    response += `\n**To get specific information:**\n`;
     response += `Ask "tell me about [equipment name]" for any equipment listed above.`;
     
     return response;
@@ -924,6 +1074,98 @@ function extractItemName(message) {
   return null;
 }
 
+// MISSING FUNCTION 1: Database chemical scoring
+async function calculateDatabaseChemicalScore(lowerMessage, originalMessage) {
+  const actionKeywords = ['what is', 'tell me about', 'details', 'info', 'properties', 'available', 'stock', 'find'];
+  const hasAction = actionKeywords.some(action => lowerMessage.includes(action));
+  
+  if (!hasAction) return 0;
+  
+  const chemicalName = extractChemicalName(originalMessage);
+  if (chemicalName) {
+    try {
+      const chemical = await findChemicalInDatabase(chemicalName);
+      if (chemical) return 0.9; // High confidence - found in database
+    } catch (error) {
+      console.error('Database error in chemical scoring:', error);
+    }
+  }
+  
+  const chemicalKeywords = ['chemical', 'chemicals', 'reagent', 'compound', 'substance', 'solution'];
+  if (chemicalKeywords.some(keyword => lowerMessage.includes(keyword))) {
+    return 0.7; // Medium confidence - generic chemical query
+  }
+  return 0;
+}
+
+// MISSING FUNCTION 2: Database equipment scoring
+async function calculateDatabaseEquipmentScore(lowerMessage, originalMessage) {
+  const actionKeywords = ['what is', 'tell me about', 'details', 'spec', 'available', 'book', 'reserve', 'find'];
+  const hasAction = actionKeywords.some(action => lowerMessage.includes(action));
+  
+  if (!hasAction) return 0;
+  
+  const equipmentName = extractEquipmentName(originalMessage);
+  if (equipmentName) {
+    try {
+      const equipment = await findEquipmentInDatabase(equipmentName);
+      if (equipment) return 0.9;
+    } catch (error) {
+      console.error('Database error in equipment scoring:', error);
+    }
+  }
+  
+  const equipmentKeywords = ['equipment', 'instrument', 'device', 'apparatus', 'machine'];
+  if (equipmentKeywords.some(keyword => lowerMessage.includes(keyword))) {
+    return 0.7;
+  }
+  return 0;
+}
+
+// MISSING FUNCTION 3: Equipment query detection
+async function containsEquipmentQuery(message) {
+  const actionKeywords = ['what is', 'tell me about', 'details', 'spec', 'available', 'book', 'reserve', 'find', 'show me'];
+  const hasAction = actionKeywords.some(action => message.includes(action));
+  
+  if (!hasAction) return false;
+  
+  const potentialEquipmentName = extractEquipmentName(message);
+  if (potentialEquipmentName) {
+    try {
+      const equipment = await findEquipmentInDatabase(potentialEquipmentName);
+      return equipment !== null;
+    } catch (error) {
+      console.error('Database check error in containsEquipmentQuery:', error);
+      return false;
+    }
+  }
+  
+  const equipmentKeywords = ['equipment', 'instrument', 'device', 'apparatus', 'machine'];
+  return equipmentKeywords.some(keyword => message.includes(keyword));
+}
+
+// MISSING FUNCTIONS 4-8: Simple detection functions
+function containsBorrowingRequest(message) {
+  return message.includes('borrow') || message.includes('request') || message.includes('need');
+}
+
+function containsScheduleQuery(message) {
+  return message.includes('schedule') || message.includes('booking') || message.includes('when');
+}
+
+function containsSafetyQuery(message) {
+  return message.includes('safety') || message.includes('hazard') || message.includes('ppe') ||
+         message.includes('spill') || message.includes('emergency');
+}
+
+function containsInventoryAlert(message) {
+  return message.includes('low stock') || message.includes('expiring') || message.includes('expired');
+}
+
+function containsMaintenanceQuery(message) {
+  return message.includes('maintenance') || message.includes('calibration') || message.includes('service');
+}
+
 function formatBorrowingInstructions(item, type) {
   if (type === 'chemical') {
     return `📋 **To borrow ${item.name}:**\n\n` +
@@ -1112,9 +1354,10 @@ async function updateConversationTimestamp(conversationId) {
   }
 }
 
-async function logQuery(userId, message, response, type) {
+async function logQuery(userId, message, responseType, queryType = null) {
   try {
-    await logChatbotQuery(userId, message, response, type);
+    const safeQueryType = queryType || classifyQueryType(message) || 'general';
+    await logChatbotQuery(userId, message, responseType, safeQueryType);
   } catch (error) {
     console.error('Failed to log query:', error);
   }
@@ -1151,5 +1394,18 @@ module.exports = {
   handleInventoryAlerts,
   handleMaintenanceStatus,
   generateHelpResponse,
-  generateIntelligentDefault
+  generateIntelligentDefault,
+  classifyQueryType,
+  logQuery,
+  analyzeMessageIntent,
+  calculateIntentScore,
+  calculateDatabaseChemicalScore,
+  calculateDatabaseEquipmentScore,
+  containsChemicalQuery,
+  containsEquipmentQuery,
+  containsBorrowingRequest,
+  containsScheduleQuery,
+  containsSafetyQuery,
+  containsInventoryAlert,
+  containsMaintenanceQuery
 };
