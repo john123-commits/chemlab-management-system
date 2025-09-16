@@ -74,6 +74,59 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
     }
   }
 
+  Future<void> _deleteBorrowing() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Request'),
+        content: const Text(
+          'Are you sure you want to permanently delete this request? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await ApiService.deleteBorrowing(widget.borrowing.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Request deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true); // Return true to refresh the list
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete request: ${error.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   // ✅ FIXED: Mark as Returned Method - Navigate to Return Screen
   Future<void> _markAsReturned() async {
     final confirmed = await showDialog<bool>(
@@ -518,6 +571,30 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _deleteBorrowing,
+                    icon: const Icon(Icons.delete, color: Colors.white),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red[700],
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    label: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text('Delete Request'),
+                  ),
+                ),
               ] else if (borrowing.status == 'approved' &&
                   !borrowing.returned) ...[
                 // ✅ NEW: Mark as Returned Button for approved borrowings
@@ -567,6 +644,30 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _deleteBorrowing,
+                    icon: const Icon(Icons.delete, color: Colors.white),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red[700],
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    label: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text('Delete Request'),
+                  ),
+                ),
               ] else if (borrowing.returned) ...[
                 // ✅ NEW: Returned Status Display
                 Card(
@@ -577,6 +678,30 @@ class _BorrowingDetailsScreenState extends State<BorrowingDetailsScreen> {
                       'This borrowing has been marked as returned.',
                       style: TextStyle(color: Colors.blue),
                     ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _deleteBorrowing,
+                    icon: const Icon(Icons.delete, color: Colors.white),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red[700],
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    label: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text('Delete Request'),
                   ),
                 ),
               ],
