@@ -1,6 +1,9 @@
 const express = require('express');
 const User = require('../models/User');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const db = require('../config/db');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 const router = express.Router();
 
@@ -17,16 +20,10 @@ router.get('/', authenticateToken, async (req, res) => {
       console.log(`Admin found ${users.length} total users`);
     } else if (req.user.role === 'technician') {
       // Technicians see only active borrowers
-      const result = await db.query(`
-        SELECT
-          id, name, email, role, status, phone, student_id,
-          institution, education_level, semester, department,
-          created_at
-        FROM users
-        WHERE role = 'borrower' AND status = 'active'
-        ORDER BY created_at DESC
-      `);
-      users = result.rows;
+      users = await User.findAll({
+        where: { role: 'borrower', status: 'active' },
+        order: [['created_at', 'DESC']]
+      });
       console.log(`Technician found ${users.length} active borrowers`);
     } else {
       return res.status(403).json({ error: 'Permission denied' });

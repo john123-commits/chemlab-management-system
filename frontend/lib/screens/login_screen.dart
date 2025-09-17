@@ -36,12 +36,15 @@ class _LoginScreenState extends State<LoginScreen> {
         logger.d('Email: ${_emailController.text.trim()}');
         logger.d('Password: ${_passwordController.text}');
 
-        await Provider.of<AuthProvider>(context, listen: false).login(
+        // Login through AuthProvider
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        await authProvider.login(
           _emailController.text.trim(),
           _passwordController.text,
         );
 
         logger.d('=== LOGIN SUCCESS ===');
+        // No manual navigation - let Consumer<AuthProvider> in main.dart handle the automatic screen switch
       } catch (error) {
         logger.d('=== LOGIN ERROR ===');
         logger.d('Error type: ${error.runtimeType}');

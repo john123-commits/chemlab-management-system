@@ -480,10 +480,17 @@ class Borrowing {
         return null;
       }
       
-      // Only allow deletion of pending or rejected requests
-      if (!['pending', 'rejected'].includes(borrowing.status)) {
-        throw new Error('Cannot delete approved or returned borrowing requests');
+      // Allow admins and technicians to delete any status, borrowers only their own pending/rejected
+      if (borrowing.borrower_id === deletedByUserId) {
+        // Borrower can only delete their own pending or rejected requests
+        if (!['pending', 'rejected'].includes(borrowing.status)) {
+          throw new Error('Borrowers can only delete their own pending or rejected requests');
+        }
+      } else if (deletedByRole !== 'admin' && deletedByRole !== 'technician') {
+        // Non-admin/technician trying to delete someone else's request
+        throw new Error('Permission denied: insufficient role to delete this request');
       }
+      // Admins and technicians can delete any status
       
       // Check if the deleter has permission
       if (borrowing.borrower_id !== deletedByUserId &&
