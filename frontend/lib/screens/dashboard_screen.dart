@@ -26,6 +26,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _pendingRequestsCount = 0;
   bool _isLoading = true;
   String? _errorMessage;
+  bool _isUserInfoExpanded = false;
+
+  // Borrower-specific stats
+  int _activeRequestsCount = 0;
+  int _borrowedItemsCount = 0;
+  int _pendingReturnsCount = 0;
+  int _recentActivityCount = 0;
 
   String _getHealthStatus(int count) {
     if (count == 0) return 'critical';
@@ -104,7 +111,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // For borrowers - limited dashboard
       if (userRole == 'borrower') {
         try {
-          final alerts = await ApiService.getAlerts();
+          // Load alerts and borrower stats concurrently
+          final alertsFuture = ApiService.getAlerts();
+          final statsFuture = _loadBorrowerStats();
+
+          final alerts = await alertsFuture;
+          await statsFuture;
+
           if (mounted) {
             setState(() {
               _alerts = alerts;
@@ -186,6 +199,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _refreshDashboardData() async {
     await _loadDashboardData();
+  }
+
+  Future<void> _loadBorrowerStats() async {
+    try {
+      // Load active borrowings for the current user
+      final activeBorrowings = await ApiService.getActiveBorrowings();
+      final allBorrowings = await ApiService.getBorrowings();
+
+      if (mounted) {
+        setState(() {
+          _activeRequestsCount = allBorrowings
+              .where((b) => b.status == 'pending' || b.status == 'approved')
+              .length;
+          _borrowedItemsCount = activeBorrowings.length;
+          _pendingReturnsCount =
+              activeBorrowings.where((b) => b.status == 'approved').length;
+          _recentActivityCount = allBorrowings.where((b) {
+            final now = DateTime.now();
+            final borrowingDate = b.createdAt;
+            return now.difference(borrowingDate).inDays <= 7; // Last 7 days
+          }).length;
+        });
+      }
+    } catch (error) {
+      logger.d('Error loading borrower stats: $error');
+      // Keep default values (0)
+    }
   }
 
   @override
@@ -697,128 +737,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _buildUserInfoCard(),
                         const SizedBox(height: 24),
 
-                        Card(
-                          elevation: 4,
-                          child: Padding(
-                            padding: const EdgeInsets.all(24.0),
-                            child: Column(
-                              children: [
-                                const Icon(
-                                  Icons.science_outlined,
-                                  size: 64,
-                                  color: Colors.blue,
-                                ),
-                                const SizedBox(height: 16),
-                                const Text(
-                                  'Welcome Borrower!',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                const Text(
-                                  'You can:',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                    '• View available chemicals and equipment'),
-                                const Text('• Submit borrowing requests'),
-                                const Text('• View your request status'),
-                                const SizedBox(height: 24),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const ChemicalsScreen(),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.science),
-                                    label: const Text('View Chemicals'),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const EquipmentScreen(),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.build),
-                                    label: const Text('View Equipment'),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const BorrowingsScreen(),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.assignment),
-                                    label: const Text('My Requests'),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const BorrowingFormScreen(),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.add),
-                                    label: const Text('Request Borrowing'),
-                                  ),
-                                ),
-                                // ✅ ChatBot Quick Action for Borrowers
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const ChatBotScreen(),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.chat_bubble),
-                                    label: const Text('Chat with ChemBot'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                        // ✅ Dashboard Statistics Section
+                        _buildBorrowerStatsSection(),
+                        const SizedBox(height: 24),
+
+                        // ✅ Redesigned Action Buttons as Interactive Cards
+                        _buildActionButtonsGrid(),
                         const SizedBox(height: 24),
                         // Enhanced Borrower alerts (if any)
                         if (_alerts != null && _alerts!.isNotEmpty) ...[
@@ -864,89 +788,286 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ✅ New method to build user information card
+  // ✅ Redesigned compact user information header card
   Widget _buildUserInfoCard() {
     final user = Provider.of<AuthProvider>(context, listen: false).user!;
 
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'User Information',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
+    // Generate initials for avatar
+    String initials = user.name
+        .split(' ')
+        .map((e) => e.isNotEmpty ? e[0] : '')
+        .join('')
+        .toUpperCase();
+    if (initials.length > 2) initials = initials.substring(0, 2);
+
+    return Semantics(
+      label: 'User information for ${user.name}',
+      hint: _isUserInfoExpanded
+          ? 'Tap to collapse details'
+          : 'Tap to expand details',
+      button: true,
+      child: Card(
+        elevation: 3,
+        margin: const EdgeInsets.symmetric(
+            horizontal: AppConstants.spacing16,
+            vertical: AppConstants.spacing8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+        ),
+        child: InkWell(
+          onTap: () {
+            // Toggle expanded view
+            setState(() {
+              _isUserInfoExpanded = !_isUserInfoExpanded;
+            });
+          },
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+          child: Padding(
+            padding: const EdgeInsets.all(AppConstants.paddingMedium),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    // Avatar
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: Colors.blue[100],
+                      child: Text(
+                        initials,
+                        style: const TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.spacing12),
+                    // User info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user.name,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          Text(
+                            user.email,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          Text(
+                            user.role.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: user.role == 'admin'
+                                  ? Colors.red
+                                  : user.role == 'technician'
+                                      ? Colors.green
+                                      : Colors.blue,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Expand/collapse icon
+                    Icon(
+                      _isUserInfoExpanded
+                          ? Icons.expand_less
+                          : Icons.expand_more,
+                      color: Colors.grey[600],
+                    ),
+                  ],
+                ),
+                // Expanded details
+                if (_isUserInfoExpanded) ...[
+                  const SizedBox(height: AppConstants.spacing12),
+                  const Divider(),
+                  const SizedBox(height: AppConstants.spacing8),
+                  if (user.phone != null && user.phone!.isNotEmpty)
+                    _buildCompactUserDetailRow('Phone', user.phone!),
+                  if (user.studentId != null && user.studentId!.isNotEmpty)
+                    _buildCompactUserDetailRow('Student ID', user.studentId!),
+                  if (user.institution != null && user.institution!.isNotEmpty)
+                    _buildCompactUserDetailRow(
+                        'Institution', user.institution!),
+                  if (user.department != null && user.department!.isNotEmpty)
+                    _buildCompactUserDetailRow('Department', user.department!),
+                  if (user.educationLevel != null &&
+                      user.educationLevel!.isNotEmpty)
+                    _buildCompactUserDetailRow(
+                        'Education Level', user.educationLevel!),
+                  if (user.semester != null && user.semester!.isNotEmpty)
+                    _buildCompactUserDetailRow('Semester', user.semester!),
+                  _buildCompactUserDetailRow(
+                    'Member Since',
+                    '${user.createdAt.day}/${user.createdAt.month}/${user.createdAt.year}',
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 12),
-            _buildUserDetailRow('Name', user.name),
-            _buildUserDetailRow('Email', user.email),
-            if (user.phone != null && user.phone!.isNotEmpty)
-              _buildUserDetailRow('Phone', user.phone!),
-            if (user.studentId != null && user.studentId!.isNotEmpty)
-              _buildUserDetailRow('Student ID', user.studentId!),
-            if (user.institution != null && user.institution!.isNotEmpty)
-              _buildUserDetailRow('Institution', user.institution!),
-            if (user.department != null && user.department!.isNotEmpty)
-              _buildUserDetailRow('Department', user.department!),
-            if (user.educationLevel != null && user.educationLevel!.isNotEmpty)
-              _buildUserDetailRow('Education Level', user.educationLevel!),
-            if (user.semester != null && user.semester!.isNotEmpty)
-              _buildUserDetailRow('Semester', user.semester!),
-            _buildUserDetailRow(
-              'Role',
-              user.role.toUpperCase(),
-              isHighlighted: true,
-            ),
-            _buildUserDetailRow(
-              'Member Since',
-              '${user.createdAt.day}/${user.createdAt.month}/${user.createdAt.year}',
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   // ✅ Helper method to build user detail rows
-  Widget _buildUserDetailRow(String label, String value,
-      {bool isHighlighted = false}) {
+
+  // ✅ Helper method to build compact user detail rows for expanded view
+  Widget _buildCompactUserDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.grey,
-              ),
+          Text(
+            '$label: ',
+            style: const TextStyle(
+              fontWeight: FontWeight.w500,
+              color: Colors.grey,
+              fontSize: 12,
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: TextStyle(
-                fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal,
-                color: isHighlighted
-                    ? (value == 'ADMIN'
-                        ? Colors.red
-                        : value == 'TECHNICIAN'
-                            ? Colors.green
-                            : Colors.blue)
-                    : Colors.black,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.black87,
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ✅ Build borrower statistics section
+  Widget _buildBorrowerStatsSection() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        int crossAxisCount =
+            screenWidth >= 768 ? 2 : 1; // 2 columns on tablet+, 1 on mobile
+
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: AppConstants.spacing16,
+          mainAxisSpacing: AppConstants.spacing16,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            _buildBorrowerStatCard(
+              'Active Requests',
+              _activeRequestsCount.toString(),
+              Icons.pending,
+              Colors.blue,
+              'Requests awaiting approval',
+            ),
+            _buildBorrowerStatCard(
+              'Items Borrowed',
+              _borrowedItemsCount.toString(),
+              Icons.inventory,
+              Colors.green,
+              'Currently in your possession',
+            ),
+            _buildBorrowerStatCard(
+              'Pending Returns',
+              _pendingReturnsCount.toString(),
+              Icons.assignment_return,
+              Colors.orange,
+              'Items to return soon',
+            ),
+            _buildBorrowerStatCard(
+              'Recent Activity',
+              _recentActivityCount.toString(),
+              Icons.history,
+              Colors.purple,
+              'Activity in last 7 days',
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ✅ Build individual borrower stat card
+  Widget _buildBorrowerStatCard(String title, String value, IconData icon,
+      Color color, String description) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+      ),
+      child: InkWell(
+        onTap: () {
+          // Navigate to relevant screen based on stat type
+          switch (title) {
+            case 'Active Requests':
+            case 'Items Borrowed':
+            case 'Pending Returns':
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const BorrowingsScreen()),
+              );
+              break;
+            case 'Recent Activity':
+              // Could navigate to activity/history screen
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('View recent activity')),
+              );
+              break;
+          }
+        },
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+        hoverColor: color.withValues(alpha: 0.1),
+        splashColor: color.withValues(alpha: 0.2),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(AppConstants.paddingMedium),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 32),
+              const SizedBox(height: AppConstants.spacing8),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing4),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppConstants.spacing4),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1416,5 +1537,131 @@ class _DashboardScreenState extends State<DashboardScreen> {
       default:
         return Icons.notifications;
     }
+  }
+
+  // ✅ Build action buttons grid
+  Widget _buildActionButtonsGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        int crossAxisCount =
+            screenWidth >= 768 ? 2 : 1; // 2 columns on tablet+, 1 on mobile
+
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: AppConstants.spacing16,
+          mainAxisSpacing: AppConstants.spacing16,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            _buildActionCard(
+              'View Chemicals',
+              'Browse available chemicals',
+              Icons.science,
+              Colors.blue[600]!,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const ChemicalsScreen()),
+              ),
+            ),
+            _buildActionCard(
+              'View Equipment',
+              'Browse available equipment',
+              Icons.build,
+              Colors.blue[600]!,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const EquipmentScreen()),
+              ),
+            ),
+            _buildActionCard(
+              'My Requests',
+              'View your borrowing requests',
+              Icons.assignment,
+              Colors.blue[600]!,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const BorrowingsScreen()),
+              ),
+            ),
+            _buildActionCard(
+              'Request Borrowing',
+              'Submit a new borrowing request',
+              Icons.add,
+              const Color(0xFF4CAF50), // Green
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const BorrowingFormScreen()),
+              ),
+            ),
+            _buildActionCard(
+              'Chat with ChemBot',
+              'Get help from our AI assistant',
+              Icons.chat_bubble,
+              const Color(0xFF9C27B0), // Purple
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ChatBotScreen()),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ✅ Build individual action card
+  Widget _buildActionCard(String title, String description, IconData icon,
+      Color color, VoidCallback onTap) {
+    return Semantics(
+      label: title,
+      hint: description,
+      button: true,
+      child: Card(
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+          hoverColor: color.withValues(alpha: 0.1),
+          splashColor: color.withValues(alpha: 0.2),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(AppConstants.paddingMedium),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 40),
+                const SizedBox(height: AppConstants.spacing12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppConstants.spacing4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
