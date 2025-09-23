@@ -71,13 +71,13 @@ class Borrowing {
 
   static async findAll(filters = {}) {
     let query = `
-      SELECT b.*, 
-             u.name as borrower_name, 
+      SELECT b.*,
+             u.name as borrower_name,
              u.email as borrower_email,
              t.name as technician_name,
              a.name as admin_name
-      FROM borrowings b 
-      JOIN users u ON b.borrower_id = u.id 
+      FROM borrowings b
+      LEFT JOIN users u ON b.borrower_id = u.id
       LEFT JOIN users t ON b.technician_id = t.id
       LEFT JOIN users a ON b.admin_id = a.id
       WHERE 1=1
@@ -131,13 +131,13 @@ class Borrowing {
   static async findById(id) {
     try {
       const result = await db.query(
-        `SELECT b.*, 
-                u.name as borrower_name, 
+        `SELECT b.*,
+                u.name as borrower_name,
                 u.email as borrower_email,
                 t.name as technician_name,
                 a.name as admin_name
-         FROM borrowings b 
-         JOIN users u ON b.borrower_id = u.id 
+         FROM borrowings b
+         LEFT JOIN users u ON b.borrower_id = u.id
          LEFT JOIN users t ON b.technician_id = t.id
          LEFT JOIN users a ON b.admin_id = a.id
          WHERE b.id = $1`,
@@ -433,9 +433,9 @@ class Borrowing {
       }
       
       const query = `
-        SELECT ${selectClause}, u.name as borrower_name, u.email as borrower_email 
-        FROM borrowings b 
-        JOIN users u ON b.borrower_id = u.id 
+        SELECT ${selectClause}, u.name as borrower_name, u.email as borrower_email
+        FROM borrowings b
+        LEFT JOIN users u ON b.borrower_id = u.id
         ${joinClause}
         WHERE b.status = 'approved' AND b.return_date < CURRENT_DATE
       `;

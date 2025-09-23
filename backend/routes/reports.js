@@ -243,7 +243,6 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
 
     // Use the same logic as monthly report for consistent counts
     let pendingBorrowings = await Borrowing.count({ where: { status: 'pending', deleted_at: null } });
-    console.log('Pending borrowings count:', pendingBorrowings);
 
     // If no pending found, try other status values
     if (pendingBorrowings === 0) {
@@ -259,8 +258,6 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
         statusCounts[status] = (statusCounts[status] || 0) + 1;
       });
 
-      console.log('All borrowing statuses:', statusCounts);
-
       // Use same logic as monthly report
       if (statusCounts['submitted'] > 0) {
         pendingBorrowings = statusCounts['submitted'];
@@ -271,11 +268,13 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
       }
     }
 
+    const activeBorrowingsCount = await Borrowing.count({ where: { status: 'approved', deleted_at: null } });
+
     const report = {
       summary: {
         totalChemicals: await Chemical.count({ where: { deleted_at: null } }),
         totalEquipment: await Equipment.count({ where: { deleted_at: null } }),
-        activeBorrowings: await Borrowing.count({ where: { status: 'approved', deleted_at: null } }),
+        activeBorrowings: activeBorrowingsCount,
         pendingBorrowings: pendingBorrowings,
         overdueBorrowings: overdueBorrowings.length
       },
@@ -348,8 +347,117 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
       });
     }
 
+    // ========================================
+    // CHARTS SECTION - ALWAYS INCLUDED
+    // ========================================
+    doc.addPage();
+    doc.fontSize(18).fillColor('#2c3e50').text('Data Visualizations & Analytics', { align: 'center' });
+    doc.moveDown();
+
+    // Add a horizontal line separator
+    doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).stroke('#2c3e50');
+    doc.moveDown(1);
+
+    // Chemical Inventory Status Chart (Text-based representation)
+    doc.fontSize(16).fillColor('#2c3e50').text('Chemical Inventory Status Distribution');
+    doc.moveDown(0.5);
+
+    // Add a separator line
+    doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).stroke('#bdc3c7');
+    doc.moveDown(1);
+
+    const chartTotalChemicals = report.summary.totalChemicals;
+    const chartExpiringCount = report.expiringChemicals.length;
+    const chartLowStockCount = report.lowStockChemicals.length;
+    const chartNormalCount = chartTotalChemicals - chartExpiringCount - chartLowStockCount;
+
+    // Create a simple text-based chart with guaranteed characters
+    doc.fontSize(12).fillColor('#27ae60').text('Normal Chemicals:');
+    const normalPercentage = chartTotalChemicals > 0 ? Math.round((chartNormalCount / chartTotalChemicals) * 100) : 0;
+    doc.fillColor('#000000').text(`Count: ${chartNormalCount} | Percentage: ${normalPercentage}% | Status: GOOD`, { indent: 20 });
+
+    doc.fontSize(12).fillColor('#f39c12').text('Expiring Soon:');
+    const expiringPercentage = chartTotalChemicals > 0 ? Math.round((chartExpiringCount / chartTotalChemicals) * 100) : 0;
+    doc.fillColor('#000000').text(`Count: ${chartExpiringCount} | Percentage: ${expiringPercentage}% | Status: WARNING`, { indent: 20 });
+
+    doc.fontSize(12).fillColor('#e74c3c').text('Low Stock:');
+    const lowStockPercentage = chartTotalChemicals > 0 ? Math.round((chartLowStockCount / chartTotalChemicals) * 100) : 0;
+    doc.fillColor('#000000').text(`Count: ${chartLowStockCount} | Percentage: ${lowStockPercentage}% | Status: CRITICAL`, { indent: 20 });
+
+    doc.moveDown(1);
+
+    // Equipment Status Summary (Text-based)
+    doc.fontSize(16).fillColor('#2c3e50').text('Equipment Status Summary');
+    doc.moveDown(0.5);
+
+    // Add a separator line
+    doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).stroke('#bdc3c7');
+    doc.moveDown(1);
+
+    const chartTotalEquipment = report.summary.totalEquipment;
+    const chartDueEquipment = report.dueEquipment.length;
+    const chartMaintenanceRate = chartTotalEquipment > 0 ? Math.round((chartDueEquipment / chartTotalEquipment) * 100) : 0;
+
+    doc.fontSize(12).text(`Total Equipment: ${chartTotalEquipment}`);
+    doc.fontSize(12).text(`Due for Maintenance: ${chartDueEquipment}`);
+    doc.fontSize(12).text(`Maintenance Rate: ${chartMaintenanceRate}%`);
+
+    // Simple progress bar for maintenance rate
+    doc.fillColor('#f39c12').text('Maintenance Status:');
+    doc.fillColor('#000000').text(`Total: ${chartTotalEquipment} | Due: ${chartDueEquipment} | Rate: ${chartMaintenanceRate}% | Status: WARNING`, { indent: 20 });
+
+    doc.moveDown(1);
+
+    // Borrowing Statistics Chart (Text-based)
+    doc.fontSize(16).fillColor('#2c3e50').text('Borrowing Statistics');
+    doc.moveDown(0.5);
+
+    // Add a separator line
+    doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).stroke('#bdc3c7');
+    doc.moveDown(1);
+
+    const chartActiveBorrowings = report.summary.activeBorrowings;
+    const chartPendingBorrowings = report.summary.pendingBorrowings;
+    const chartOverdueBorrowings = report.summary.overdueBorrowings;
+    const totalBorrowings = chartActiveBorrowings + chartPendingBorrowings + chartOverdueBorrowings;
+
+    doc.fontSize(12).fillColor('#27ae60').text('Active Borrowings:');
+    doc.fillColor('#000000').text(`Count: ${chartActiveBorrowings} | Status: GOOD`, { indent: 20 });
+
+    doc.fontSize(12).fillColor('#f39c12').text('Pending Borrowings:');
+    doc.fillColor('#000000').text(`Count: ${chartPendingBorrowings} | Status: WARNING`, { indent: 20 });
+
+    doc.fontSize(12).fillColor('#e74c3c').text('Overdue Borrowings:');
+    doc.fillColor('#000000').text(`Count: ${chartOverdueBorrowings} | Status: CRITICAL`, { indent: 20 });
+
+    doc.moveDown(1);
+
+    // Add legend
+    doc.moveDown();
+    doc.fontSize(14).text('Chart Legend:');
+    doc.fontSize(10).text('Format: Count | Percentage | Status');
+    doc.fontSize(10).text('Green = Good status, Orange = Warning, Red = Critical');
+    doc.fontSize(10).text('Status indicators show priority level for attention');
+
+    // Add summary statistics
+    doc.moveDown();
+    doc.fontSize(14).text('Key Insights:');
+    doc.fontSize(10).fillColor('#27ae60').text(`✓ Chemical Inventory Health: ${chartTotalChemicals > 0 ? Math.round((chartNormalCount / chartTotalChemicals) * 100) : 0}% normal stock`, { indent: 20 });
+    doc.fontSize(10).fillColor('#f39c12').text(`⚠ Equipment Maintenance: ${chartMaintenanceRate}% require attention`, { indent: 20 });
+    doc.fontSize(10).fillColor('#e74c3c').text(`⚠ Overdue Items: ${chartOverdueBorrowings} require immediate follow-up`, { indent: 20 });
+
+    // Reset color for footer
+    doc.fillColor('#000000');
+
+    // Add footer with generation info
+    doc.moveDown(2);
+    doc.fontSize(8).fillColor('#7f8c8d').text(
+      `Report generated by ChemLab Management System on ${new Date().toLocaleString()} | Page ${doc.pageNumber} | Charts always included`,
+      { align: 'center' }
+    );
+
     doc.end();
-    console.log('PDF generation completed successfully');
+    console.log('PDF generation completed successfully with charts');
   } catch (error) {
     console.error('Error generating PDF report:', error);
     console.error('Error stack:', error.stack);
