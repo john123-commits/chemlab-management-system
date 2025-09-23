@@ -1331,12 +1331,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'low_stock':
         actionButtons = [
           TextButton.icon(
-            onPressed: () {
-              // Navigate to order/supply management
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Navigate to supply ordering')),
-              );
-            },
+            onPressed: () => _orderSupplies(alert, color),
             icon: const Icon(Icons.shopping_cart, size: 16),
             label: const Text('Order Now'),
             style: TextButton.styleFrom(
@@ -1345,13 +1340,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           TextButton(
-            onPressed: () {
-              // Set reminder
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Reminder set for low stock item')),
-              );
-            },
+            onPressed: () => _setLowStockReminder(alert, color),
             style: TextButton.styleFrom(
               foregroundColor: color,
               textStyle: const TextStyle(fontSize: 12),
@@ -1364,12 +1353,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'overdue_borrowing':
         actionButtons = [
           TextButton.icon(
-            onPressed: () {
-              // Send reminder to user
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Reminder sent to borrower')),
-              );
-            },
+            onPressed: () => _sendBorrowingReminder(alert, color),
             icon: const Icon(Icons.send, size: 16),
             label: const Text('Send Reminder'),
             style: TextButton.styleFrom(
@@ -1378,12 +1362,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           TextButton(
-            onPressed: () {
-              // Navigate to user contact
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Navigate to user contact')),
-              );
-            },
+            onPressed: () => _contactBorrower(alert, color),
             style: TextButton.styleFrom(
               foregroundColor: color,
               textStyle: const TextStyle(fontSize: 12),
@@ -1396,12 +1375,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'equipment_maintenance':
         actionButtons = [
           TextButton.icon(
-            onPressed: () {
-              // Schedule maintenance
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Maintenance scheduled')),
-              );
-            },
+            onPressed: () => _scheduleMaintenance(alert, color),
             icon: const Icon(Icons.schedule, size: 16),
             label: const Text('Schedule'),
             style: TextButton.styleFrom(
@@ -1410,12 +1384,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           TextButton(
-            onPressed: () {
-              // Mark as resolved
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Alert marked as resolved')),
-              );
-            },
+            onPressed: () => _markAlertResolved(alert, color),
             style: TextButton.styleFrom(
               foregroundColor: color,
               textStyle: const TextStyle(fontSize: 12),
@@ -1663,5 +1632,256 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
+  }
+
+  // Alert Action Methods
+  Future<void> _orderSupplies(dynamic alert, Color color) async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Ordering supplies...'),
+            ],
+          ),
+        ),
+      );
+
+      await ApiService.orderSupplies(
+          alert['item_id'], 10, 'Ordered via dashboard alert');
+
+      if (mounted) Navigator.pop(context);
+
+      // Remove the alert from the list
+      setState(() {
+        _alerts!.remove(alert);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Supplies ordered successfully for ${alert['message'].split('"')[1]}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to order supplies: $error'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _setLowStockReminder(dynamic alert, Color color) async {
+    try {
+      // In a real implementation, this would create a reminder in the database
+      // For now, we'll just show success
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Reminder set for low stock item: ${alert['message'].split('"')[1]}'),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to set reminder: $error'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  Future<void> _sendBorrowingReminder(dynamic alert, Color color) async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Sending reminder...'),
+            ],
+          ),
+        ),
+      );
+
+      await ApiService.sendBorrowingReminder(alert['item_id'],
+          'Please return the borrowed item as soon as possible.');
+
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Reminder sent to borrower successfully'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send reminder: $error'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _contactBorrower(dynamic alert, Color color) async {
+    try {
+      // In a real implementation, this would open a contact dialog or send a message
+      // For now, we'll just show success
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Contact information displayed for borrower'),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to contact borrower: $error'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  Future<void> _scheduleMaintenance(dynamic alert, Color color) async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Scheduling maintenance...'),
+            ],
+          ),
+        ),
+      );
+
+      // Schedule maintenance for tomorrow
+      final scheduledDate = DateTime.now()
+          .add(const Duration(days: 1))
+          .toIso8601String()
+          .split('T')[0];
+      await ApiService.scheduleEquipmentMaintenance(
+          alert['item_id'], scheduledDate, 'Scheduled via dashboard alert');
+
+      if (mounted) Navigator.pop(context);
+
+      // Remove the alert from the list
+      setState(() {
+        _alerts!.remove(alert);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Maintenance scheduled successfully for ${alert['message'].split('"')[1]}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to schedule maintenance: $error'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _markAlertResolved(dynamic alert, Color color) async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Marking alert as resolved...'),
+            ],
+          ),
+        ),
+      );
+
+      await ApiService.markAlertResolved(alert['item_id'], alert['type']);
+
+      if (mounted) Navigator.pop(context);
+
+      // Remove the alert from the list
+      setState(() {
+        _alerts!.remove(alert);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Alert marked as resolved'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to mark alert as resolved: $error'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 }

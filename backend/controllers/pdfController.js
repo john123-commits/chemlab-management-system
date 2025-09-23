@@ -82,41 +82,44 @@ async function generatePDFContent(doc, chemicals, stockAnalysis, options) {
   doc.moveTo(50, doc.y + 10).lineTo(doc.page.width - 50, doc.y + 10).stroke('#bdc3c7');
   doc.moveDown(2);
 
-  // Enhanced Statistics Section
+  // Enhanced Statistics Section - Fixed Layout
   if (options.includeStatistics && stockAnalysis) {
     const statsBoxTop = doc.y;
-    doc.rect(50, statsBoxTop, doc.page.width - 100, 120).fill('#ecf0f1');
+    doc.rect(50, statsBoxTop, doc.page.width - 100, 140).fill('#ecf0f1');
     
     doc.fontSize(16).fillColor('#2c3e50').text('INVENTORY SUMMARY', 70, statsBoxTop + 15);
     
-    // Two-column layout for statistics
-    const leftCol = 70;
-    const rightCol = (doc.page.width / 2) + 50;
-    let currentStatsY = statsBoxTop + 40;
+    // Single column layout for better readability
+    const leftMargin = 70;
+    let currentStatsY = statsBoxTop + 45;
+    const lineHeight = 18;
     
     doc.fontSize(12).fillColor('#34495e');
     
-    // Left column
-    doc.text(`Total Chemicals:`, leftCol, currentStatsY);
-    doc.fillColor('#27ae60').text(`${stockAnalysis.total_chemicals}`, leftCol + 120, currentStatsY);
+    // Display stats in a single column with proper spacing
+    doc.text(`Total Chemicals:`, leftMargin, currentStatsY);
+    doc.fillColor('#27ae60').text(`${stockAnalysis.total_chemicals}`, leftMargin + 200, currentStatsY);
+    currentStatsY += lineHeight;
     
-    doc.fillColor('#34495e').text(`Expiring Soon (30 days):`, leftCol, currentStatsY + 20);
-    doc.fillColor('#f39c12').text(`${stockAnalysis.expiring_soon_count}`, leftCol + 120, currentStatsY + 20);
+    doc.fillColor('#34495e').text(`Low Stock Items:`, leftMargin, currentStatsY);
+    doc.fillColor('#e74c3c').text(`${stockAnalysis.low_stock_count}`, leftMargin + 200, currentStatsY);
+    currentStatsY += lineHeight;
     
-    // Right column
-    doc.fillColor('#34495e').text(`Low Stock Items:`, rightCol, currentStatsY);
-    doc.fillColor('#e74c3c').text(`${stockAnalysis.low_stock_count}`, rightCol + 120, currentStatsY);
+    doc.fillColor('#34495e').text(`Expiring Soon (30 days):`, leftMargin, currentStatsY);
+    doc.fillColor('#f39c12').text(`${stockAnalysis.expiring_soon_count}`, leftMargin + 200, currentStatsY);
+    currentStatsY += lineHeight;
     
-    doc.fillColor('#34495e').text(`Expired Items:`, rightCol, currentStatsY + 20);
-    doc.fillColor('#c0392b').text(`${stockAnalysis.expired_count}`, rightCol + 120, currentStatsY + 20);
+    doc.fillColor('#34495e').text(`Expired Items:`, leftMargin, currentStatsY);
+    doc.fillColor('#c0392b').text(`${stockAnalysis.expired_count}`, leftMargin + 200, currentStatsY);
+    currentStatsY += lineHeight;
     
-    // Total value at bottom center (fixed currency issue)
+    // Total value (removed currency symbol)
     if (stockAnalysis.total_inventory_value && parseFloat(stockAnalysis.total_inventory_value) > 0) {
-      doc.fillColor('#34495e').text(`Total Inventory Value: ${parseFloat(stockAnalysis.total_inventory_value).toFixed(2)} USD`, 
-        70, currentStatsY + 50, { width: doc.page.width - 140, align: 'center' });
+      doc.fillColor('#34495e').text(`Total Inventory Value:`, leftMargin, currentStatsY);
+      doc.text(`${parseFloat(stockAnalysis.total_inventory_value).toFixed(2)}`, leftMargin + 200, currentStatsY);
     }
     
-    doc.y = statsBoxTop + 130;
+    doc.y = statsBoxTop + 150;
     doc.moveDown(1);
   }
 
@@ -136,25 +139,56 @@ async function generatePDFContent(doc, chemicals, stockAnalysis, options) {
     doc.moveDown(1);
   }
 
-  // Enhanced Table Section
+  // Enhanced Table Section with Dynamic Column Widths
   doc.fontSize(16).fillColor('#2c3e50').text('CHEMICAL DETAILS');
   doc.moveDown(0.5);
 
   const columns = getColumns(options);
   const tableStartY = doc.y;
-  const rowHeight = 25;
-  const colWidth = (doc.page.width - 100) / columns.length;
+  const rowHeight = 30; // Increased from 25 to 30
+  const tableWidth = doc.page.width - 100;
+
+  // Define optimal column widths based on content
+  const getColumnWidths = (columns) => {
+    const widthMap = {
+      'Chemical Name': 90,
+      'Category': 60,
+      'Quantity': 60,
+      'Location': 70,
+      'Initial Qty': 55,
+      'Used': 40,
+      'Reorder Level': 60,
+      'CAS Number': 65,
+      'Formula': 55,
+      'State': 45,
+      'Hazard Class': 75,
+      'Expiry Date': 65
+    };
+    
+    return columns.map(col => widthMap[col.header] || 60);
+  };
+
+  const colWidths = getColumnWidths(columns);
+  const totalCalculatedWidth = colWidths.reduce((sum, width) => sum + width, 0);
+  
+  // Scale widths to fit available space
+  const scaleFactor = tableWidth / totalCalculatedWidth;
+  const scaledWidths = colWidths.map(width => width * scaleFactor);
 
   // Table header with background
-  doc.rect(50, tableStartY, doc.page.width - 100, rowHeight).fill('#3498db');
+  doc.rect(50, tableStartY, tableWidth, rowHeight).fill('#3498db');
   
-  // Header text
-  doc.fontSize(10).fillColor('white');
+  // Header text with proper positioning
+  doc.fontSize(9).fillColor('white'); // Reduced font size from 10 to 9
+  let currentX = 50;
   columns.forEach((col, index) => {
-    doc.text(col.header, 55 + (index * colWidth), tableStartY + 8, { 
-      width: colWidth - 10, 
-      align: 'left' 
+    doc.text(col.header, currentX + 5, tableStartY + 10, { 
+      width: scaledWidths[index] - 10, 
+      align: 'left',
+      lineBreak: false,
+      ellipsis: true
     });
+    currentX += scaledWidths[index];
   });
 
   let currentY = tableStartY + rowHeight;
@@ -167,20 +201,24 @@ async function generatePDFContent(doc, chemicals, stockAnalysis, options) {
       currentY = 50;
       
       // Redraw header on new page
-      doc.rect(50, currentY, doc.page.width - 100, rowHeight).fill('#3498db');
-      doc.fontSize(10).fillColor('white');
+      doc.rect(50, currentY, tableWidth, rowHeight).fill('#3498db');
+      doc.fontSize(9).fillColor('white');
+      let headerX = 50;
       columns.forEach((col, colIndex) => {
-        doc.text(col.header, 55 + (colIndex * colWidth), currentY + 8, { 
-          width: colWidth - 10, 
-          align: 'left' 
+        doc.text(col.header, headerX + 5, currentY + 10, { 
+          width: scaledWidths[colIndex] - 10, 
+          align: 'left',
+          lineBreak: false,
+          ellipsis: true
         });
+        headerX += scaledWidths[colIndex];
       });
       currentY += rowHeight;
     }
 
     // Alternating row colors
     const rowColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
-    doc.rect(50, currentY, doc.page.width - 100, rowHeight).fill(rowColor);
+    doc.rect(50, currentY, tableWidth, rowHeight).fill(rowColor);
 
     // Set text color based on status
     let textColor = '#2c3e50';
@@ -190,16 +228,20 @@ async function generatePDFContent(doc, chemicals, stockAnalysis, options) {
       textColor = '#f39c12';
     }
 
-    doc.fontSize(9).fillColor(textColor);
+    doc.fontSize(8).fillColor(textColor); // Reduced font size from 9 to 8
 
+    // Draw cell content with proper positioning
+    let cellX = 50;
     columns.forEach((col, colIndex) => {
       const value = getColumnValue(chemical, col.key);
-      doc.text(value, 55 + (colIndex * colWidth), currentY + 8, {
-        width: colWidth - 10,
+      doc.text(value, cellX + 5, currentY + 10, {
+        width: scaledWidths[colIndex] - 10,
         height: rowHeight - 6,
         ellipsis: true,
-        align: 'left'
+        align: 'left',
+        lineBreak: false
       });
+      cellX += scaledWidths[colIndex];
     });
 
     currentY += rowHeight;

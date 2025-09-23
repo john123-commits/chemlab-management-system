@@ -7,6 +7,7 @@ import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/models/equipment.dart';
 import 'package:chemlab_frontend/models/borrowing.dart';
 import 'package:chemlab_frontend/models/pdf_filter_options.dart';
+import 'package:chemlab_frontend/models/equipment_pdf_filter_options.dart';
 import 'package:logger/logger.dart';
 import 'dart:io';
 import 'dart:typed_data';
@@ -1192,6 +1193,176 @@ class ApiService {
     } catch (error) {
       logger.e('Error saving PDF: $error');
       rethrow;
+    }
+  }
+
+  // Add this method to ApiService class:
+  static Future<void> generateEquipmentPDF(
+      EquipmentPdfFilterOptions options) async {
+    final token = await getAuthToken();
+
+    logger.d('Generating Equipment PDF with options: ${options.toJson()}');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/equipment/generate-pdf'),
+      headers: getHeaders(token),
+      body: jsonEncode(options.toJson()),
+    );
+
+    logger.d('Equipment PDF Response Status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final bytes = response.bodyBytes;
+      logger.d('Equipment PDF bytes received: ${bytes.length} bytes');
+
+      if (bytes.isEmpty) {
+        throw Exception('Received empty PDF file');
+      }
+
+      // Save and open the PDF (reuse the same method as chemicals)
+      await _savePdfFileDesktop(bytes);
+    } else {
+      logger.e('Equipment PDF generation failed: ${response.body}');
+      throw Exception('Failed to generate Equipment PDF: ${response.body}');
+    }
+  }
+
+  static Future<void> _savePdfFileDesktop(Uint8List bytes) async {
+    try {
+      // Get Downloads directory path
+      String downloadsPath;
+
+      if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'];
+        downloadsPath = '$userProfile\\Downloads';
+      } else if (Platform.isMacOS || Platform.isLinux) {
+        final home = Platform.environment['HOME'];
+        downloadsPath = '$home/Downloads';
+      } else {
+        // Fallback to documents directory
+        final directory = await getApplicationDocumentsDirectory();
+        downloadsPath = directory.path;
+      }
+
+      // Create filename with timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'equipment-inventory-$timestamp.pdf';
+      final filePath = '$downloadsPath${Platform.pathSeparator}$fileName';
+
+      // Write PDF to file
+      final file = File(filePath);
+      await file.writeAsBytes(bytes);
+
+      logger.d('Equipment PDF saved to: $filePath');
+
+      // Try to open the PDF
+      final uri = Uri.file(filePath);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    } catch (error) {
+      logger.e('Error saving Equipment PDF: $error');
+      rethrow;
+    }
+  }
+
+  // Alert Action Methods
+  static Future<void> orderSupplies(
+      int chemicalId, int quantity, String notes) async {
+    final token = await getAuthToken();
+
+    logger.d(
+        'Ordering supplies for chemical $chemicalId, quantity: $quantity, notes: $notes');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/alerts/chemical/$chemicalId/order-supplies'),
+      headers: getHeaders(token),
+      body: jsonEncode({
+        'quantity': quantity,
+        'notes': notes,
+      }),
+    );
+
+    logger.d('Order supplies response status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      logger.d('Supplies ordered successfully');
+    } else {
+      logger.e('Failed to order supplies: ${response.body}');
+      throw Exception('Failed to order supplies: ${response.body}');
+    }
+  }
+
+  static Future<void> sendBorrowingReminder(
+      int borrowingId, String message) async {
+    final token = await getAuthToken();
+
+    logger.d('Sending reminder for borrowing $borrowingId, message: $message');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/alerts/borrowing/$borrowingId/send-reminder'),
+      headers: getHeaders(token),
+      body: jsonEncode({
+        'message': message,
+      }),
+    );
+
+    logger.d('Send reminder response status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      logger.d('Reminder sent successfully');
+    } else {
+      logger.e('Failed to send reminder: ${response.body}');
+      throw Exception('Failed to send reminder: ${response.body}');
+    }
+  }
+
+  static Future<void> scheduleEquipmentMaintenance(
+      int equipmentId, String scheduledDate, String notes) async {
+    final token = await getAuthToken();
+
+    logger.d(
+        'Scheduling maintenance for equipment $equipmentId, date: $scheduledDate, notes: $notes');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/alerts/equipment/$equipmentId/schedule-maintenance'),
+      headers: getHeaders(token),
+      body: jsonEncode({
+        'scheduledDate': scheduledDate,
+        'notes': notes,
+      }),
+    );
+
+    logger.d('Schedule maintenance response status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      logger.d('Maintenance scheduled successfully');
+    } else {
+      logger.e('Failed to schedule maintenance: ${response.body}');
+      throw Exception('Failed to schedule maintenance: ${response.body}');
+    }
+  }
+
+  static Future<void> markAlertResolved(int alertId, String alertType) async {
+    final token = await getAuthToken();
+
+    logger.d('Marking alert $alertId of type $alertType as resolved');
+
+    final response = await http.put(
+      Uri.parse('$baseUrl/alerts/$alertId/resolve'),
+      headers: getHeaders(token),
+      body: jsonEncode({
+        'alertType': alertType,
+      }),
+    );
+
+    logger.d('Mark alert resolved response status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      logger.d('Alert marked as resolved successfully');
+    } else {
+      logger.e('Failed to mark alert as resolved: ${response.body}');
+      throw Exception('Failed to mark alert as resolved: ${response.body}');
     }
   }
 }

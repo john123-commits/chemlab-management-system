@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/models/equipment.dart';
+import 'package:chemlab_frontend/models/equipment_pdf_filter_options.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
 import 'package:chemlab_frontend/screens/equipment_details_screen.dart';
 import 'package:chemlab_frontend/screens/equipment_form_screen.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
+import 'package:chemlab_frontend/widgets/equipment_pdf_filter_dialog.dart';
 import 'package:intl/intl.dart';
 
 class EquipmentScreen extends StatefulWidget {
@@ -19,6 +21,8 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
   List<Equipment> _filteredEquipment = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  String _selectedCategory = 'All';
+  String _selectedCondition = 'All';
 
   @override
   void initState() {
@@ -54,9 +58,27 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             eq.condition.toLowerCase().contains(_searchQuery.toLowerCase()) ||
             eq.location.toLowerCase().contains(_searchQuery.toLowerCase());
 
-        return matchesSearch;
+        final matchesCategory =
+            _selectedCategory == 'All' || eq.category == _selectedCategory;
+
+        final matchesCondition =
+            _selectedCondition == 'All' || eq.condition == _selectedCondition;
+
+        return matchesSearch && matchesCategory && matchesCondition;
       }).toList();
     });
+  }
+
+  List<String> _getCategories() {
+    final categories = _equipment.map((e) => e.category).toSet().toList();
+    categories.sort();
+    return ['All', ...categories];
+  }
+
+  List<String> _getConditions() {
+    final conditions = _equipment.map((e) => e.condition).toSet().toList();
+    conditions.sort();
+    return ['All', ...conditions];
   }
 
   Future<void> _refreshEquipment() async {
@@ -72,6 +94,12 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       appBar: AppBar(
         title: const Text('Equipment'),
         actions: [
+          // Add PDF generation button
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            onPressed: _showEquipmentPdfFilterDialog,
+            tooltip: 'Generate Equipment PDF Report',
+          ),
           if (!isBorrower)
             IconButton(
               icon: const Icon(Icons.add),
@@ -93,21 +121,78 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             // Search Bar - Wrapped in Material widget to fix error
             Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Material(
-                type: MaterialType.transparency,
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search equipment...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+              child: Column(
+                children: [
+                  // Search Bar
+                  Material(
+                    type: MaterialType.transparency,
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search equipment...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onChanged: (value) {
+                        _searchQuery = value;
+                        _filterEquipment();
+                      },
                     ),
                   ),
-                  onChanged: (value) {
-                    _searchQuery = value;
-                    _filterEquipment();
-                  },
-                ),
+                  const SizedBox(height: 16),
+                  // Category Filter
+                  Material(
+                    type: MaterialType.transparency,
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedCategory,
+                      decoration: InputDecoration(
+                        labelText: 'Category',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      items: _getCategories().map((category) {
+                        return DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedCategory = value!;
+                          _filterEquipment();
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Condition Filter
+                  Material(
+                    type: MaterialType.transparency,
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedCondition,
+                      decoration: InputDecoration(
+                        labelText: 'Condition',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      items: _getConditions().map((condition) {
+                        return DropdownMenuItem(
+                          value: condition,
+                          child: Text(condition),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedCondition = value!;
+                          _filterEquipment();
+                        });
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
             Expanded(
@@ -310,6 +395,69 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to delete equipment')),
         );
+      }
+    }
+  }
+
+  Future<void> _showEquipmentPdfFilterDialog() async {
+    final categories = _getCategories();
+    final conditions = _getConditions();
+    final options = EquipmentPdfFilterOptions();
+
+    final result = await showDialog<EquipmentPdfFilterOptions>(
+      context: context,
+      builder: (context) => EquipmentPdfFilterDialog(
+        categories: categories,
+        conditions: conditions,
+        initialOptions: options,
+      ),
+    );
+
+    if (result != null) {
+      try {
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AlertDialog(
+            content: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Generating Equipment PDF...'),
+              ],
+            ),
+          ),
+        );
+
+        await ApiService.generateEquipmentPDF(result);
+
+        // Hide loading indicator
+        if (mounted) Navigator.pop(context);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Equipment PDF generated and opened successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } catch (error) {
+        // Hide loading indicator
+        if (mounted) Navigator.pop(context);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Equipment PDF Error: $error'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
       }
     }
   }

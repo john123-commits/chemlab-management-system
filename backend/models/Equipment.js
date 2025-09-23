@@ -52,6 +52,81 @@ class Equipment {
     return result.rows[0];
   }
 
+  // Add to Equipment class in backend/models/Equipment.js
+
+static async getFilteredEquipment(filters = {}) {
+  let query = `
+    SELECT *, 
+           CASE 
+             WHEN last_maintenance_date + INTERVAL '1 day' * maintenance_schedule <= CURRENT_DATE + INTERVAL '${filters.maintenanceDueWithin || 30} days'
+             THEN true ELSE false 
+           END as is_maintenance_due,
+           CASE 
+             WHEN next_calibration_date <= CURRENT_DATE + INTERVAL '${filters.calibrationDueWithin || 30} days' AND next_calibration_date IS NOT NULL
+             THEN true ELSE false 
+           END as is_calibration_due,
+           CASE 
+             WHEN warranty_expiry <= CURRENT_DATE + INTERVAL '90 days' AND warranty_expiry IS NOT NULL
+             THEN true ELSE false 
+           END as is_warranty_expiring,
+           (last_maintenance_date + INTERVAL '1 day' * maintenance_schedule) as next_maintenance_date
+    FROM equipment 
+    WHERE 1=1`;
+  
+  const params = [];
+  let paramIndex = 1;
+
+  // Apply filters
+  if (filters.category && filters.category !== 'All') {
+    query += ` AND category = $${paramIndex}`;
+    params.push(filters.category);
+    paramIndex++;
+  }
+
+  if (filters.condition && filters.condition !== 'All') {
+    query += ` AND condition = $${paramIndex}`;
+    params.push(filters.condition);
+    paramIndex++;
+  }
+
+  if (filters.maintenanceDueOnly) {
+    query += ` AND last_maintenance_date + INTERVAL '1 day' * maintenance_schedule <= CURRENT_DATE + INTERVAL '${filters.maintenanceDueWithin || 30} days'`;
+  }
+
+  if (filters.calibrationDueOnly) {
+    query += ` AND next_calibration_date <= CURRENT_DATE + INTERVAL '${filters.calibrationDueWithin || 30} days' AND next_calibration_date IS NOT NULL`;
+  }
+
+  if (filters.warrantyExpiringOnly) {
+    query += ` AND warranty_expiry <= CURRENT_DATE + INTERVAL '90 days' AND warranty_expiry IS NOT NULL`;
+  }
+
+  if (filters.search) {
+    query += ` AND (name ILIKE $${paramIndex} OR category ILIKE $${paramIndex} OR manufacturer ILIKE $${paramIndex} OR model ILIKE $${paramIndex})`;
+    params.push(`%${filters.search}%`);
+    paramIndex++;
+  }
+
+  query += ' ORDER BY created_at DESC';
+  
+  const result = await db.query(query, params);
+  return result.rows;
+}
+
+static async getEquipmentAnalysis() {
+  const result = await db.query(`
+    SELECT 
+      COUNT(*) as total_equipment,
+      COUNT(*) FILTER (WHERE condition = 'poor' OR condition = 'needs_repair') as needs_attention_count,
+      COUNT(*) FILTER (WHERE last_maintenance_date + INTERVAL '1 day' * maintenance_schedule <= CURRENT_DATE + INTERVAL '30 days') as maintenance_due_count,
+      COUNT(*) FILTER (WHERE next_calibration_date <= CURRENT_DATE + INTERVAL '30 days' AND next_calibration_date IS NOT NULL) as calibration_due_count,
+      COUNT(*) FILTER (WHERE warranty_expiry <= CURRENT_DATE + INTERVAL '90 days' AND warranty_expiry IS NOT NULL) as warranty_expiring_count,
+      COUNT(*) FILTER (WHERE last_maintenance_date + INTERVAL '1 day' * maintenance_schedule <= CURRENT_DATE) as overdue_maintenance_count
+    FROM equipment
+  `);
+  return result.rows[0];
+}
+
   static async delete(id) {
     const result = await db.query('DELETE FROM equipment WHERE id = $1 RETURNING *', [id]);
     return result.rows[0];

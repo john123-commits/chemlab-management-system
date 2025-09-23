@@ -62,4 +62,14 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Generate equipment PDF
+router.post('/generate-pdf', authenticateToken, async (req, res) => {
+  try {
+    const { generateEquipmentPDF } = require('../controllers/equipmentPdfController');
+    await generateEquipmentPDF(req, res);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
