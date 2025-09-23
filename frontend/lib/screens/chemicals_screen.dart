@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chemlab_frontend/models/chemical.dart';
+import 'package:chemlab_frontend/models/pdf_filter_options.dart';
 import 'package:chemlab_frontend/services/api_service.dart';
 import 'package:chemlab_frontend/screens/chemical_details_screen.dart';
 import 'package:chemlab_frontend/screens/chemical_form_screen.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
+import 'package:chemlab_frontend/widgets/pdf_filter_dialog.dart';
 import 'package:intl/intl.dart';
 
 class ChemicalsScreen extends StatefulWidget {
@@ -82,6 +84,11 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
       appBar: AppBar(
         title: const Text('Chemicals'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            onPressed: _showPdfFilterDialog,
+            tooltip: 'Generate PDF Report',
+          ),
           if (!isBorrower)
             IconButton(
               icon: const Icon(Icons.add),
@@ -368,6 +375,34 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to delete chemical')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showPdfFilterDialog() async {
+    final categories = _getCategories();
+    final options = PdfFilterOptions();
+
+    final result = await showDialog<PdfFilterOptions>(
+      context: context,
+      builder: (context) => PdfFilterDialog(
+        categories: categories,
+        initialOptions: options,
+      ),
+    );
+
+    if (result != null) {
+      try {
+        await ApiService.generateChemicalsPDF(result);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PDF generated successfully')),
+        );
+      } catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to generate PDF: $error')),
         );
       }
     }

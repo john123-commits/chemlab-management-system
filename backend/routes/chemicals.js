@@ -3,6 +3,7 @@ const Chemical = require('../models/Chemical');
 const multer = require('multer');
 const path = require('path');
 const { authenticateToken } = require('../middleware/auth'); // Keep only this import
+const { generateChemicalsPDF } = require('../controllers/pdfController');
 const router = express.Router();
 
 // Configure multer for file uploads
@@ -84,5 +85,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Generate PDF report
+router.post('/generate-pdf', authenticateToken, generateChemicalsPDF);
 
 module.exports = router;

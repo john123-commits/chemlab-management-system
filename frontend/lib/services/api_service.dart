@@ -6,7 +6,12 @@ import 'package:chemlab_frontend/models/user.dart';
 import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/models/equipment.dart';
 import 'package:chemlab_frontend/models/borrowing.dart';
+import 'package:chemlab_frontend/models/pdf_filter_options.dart';
 import 'package:logger/logger.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 var logger = Logger();
 
@@ -1118,6 +1123,75 @@ class ApiService {
     } else {
       logger.e('Failed to create chat conversation: ${response.body}');
       throw Exception('Failed to create chat conversation: ${response.body}');
+    }
+  }
+
+  // Replace the existing method in ApiService
+  static Future<void> generateChemicalsPDF(PdfFilterOptions options) async {
+    final token = await getAuthToken();
+
+    logger.d('Generating PDF with options: ${options.toJson()}');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/chemicals/generate-pdf'),
+      headers: getHeaders(token),
+      body: jsonEncode(options.toJson()),
+    );
+
+    logger.d('PDF Response Status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final bytes = response.bodyBytes;
+      logger.d('PDF bytes received: ${bytes.length} bytes');
+
+      if (bytes.isEmpty) {
+        throw Exception('Received empty PDF file');
+      }
+
+      // Save PDF to Downloads folder
+      await _savePdfToDownloads(bytes);
+    } else {
+      logger.e('PDF generation failed: ${response.body}');
+      throw Exception('Failed to generate PDF: ${response.body}');
+    }
+  }
+
+  static Future<void> _savePdfToDownloads(Uint8List bytes) async {
+    try {
+      // Get Downloads directory path
+      String downloadsPath;
+
+      if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'];
+        downloadsPath = '$userProfile\\Downloads';
+      } else if (Platform.isMacOS || Platform.isLinux) {
+        final home = Platform.environment['HOME'];
+        downloadsPath = '$home/Downloads';
+      } else {
+        // Fallback to documents directory
+        final directory = await getApplicationDocumentsDirectory();
+        downloadsPath = directory.path;
+      }
+
+      // Create filename with timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'chemical-inventory-$timestamp.pdf';
+      final filePath = '$downloadsPath${Platform.pathSeparator}$fileName';
+
+      // Write PDF to file
+      final file = File(filePath);
+      await file.writeAsBytes(bytes);
+
+      logger.d('PDF saved to: $filePath');
+
+      // Try to open the PDF
+      final uri = Uri.file(filePath);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    } catch (error) {
+      logger.e('Error saving PDF: $error');
+      rethrow;
     }
   }
 }

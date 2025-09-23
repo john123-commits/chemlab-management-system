@@ -28,6 +28,18 @@ class Chemical {
   final String? safetyInfo;
   final String? msdsLink;
 
+  // Stock tracking fields
+  final double? initialQuantity;
+  final double? reorderLevel;
+  final String? supplier;
+  final DateTime? purchaseDate;
+  final double? costPerUnit;
+
+  // Computed fields from backend
+  final double? quantityUsed;
+  final bool? isLowStock;
+  final bool? isExpiringSoon;
+
   Chemical({
     required this.id,
     required this.name,
@@ -52,6 +64,14 @@ class Chemical {
     this.safetyPrecautions,
     this.safetyInfo,
     this.msdsLink,
+    this.initialQuantity,
+    this.reorderLevel,
+    this.supplier,
+    this.purchaseDate,
+    this.costPerUnit,
+    this.quantityUsed,
+    this.isLowStock,
+    this.isExpiringSoon,
   });
 
   factory Chemical.fromJson(Map<String, dynamic> json) {
@@ -106,6 +126,18 @@ class Chemical {
       safetyPrecautions: json['safety_precautions'] as String?,
       safetyInfo: json['safety_info'] as String?,
       msdsLink: json['msds_link'] as String?,
+      // Stock tracking fields
+      initialQuantity: parseDouble(json['initial_quantity']),
+      reorderLevel: parseDouble(json['reorder_level']),
+      supplier: json['supplier'] as String?,
+      purchaseDate: json['purchase_date'] != null
+          ? DateTime.parse(json['purchase_date'] as String)
+          : null,
+      costPerUnit: parseDouble(json['cost_per_unit']),
+      // Computed fields
+      quantityUsed: parseDouble(json['quantity_used']),
+      isLowStock: json['is_low_stock'] as bool?,
+      isExpiringSoon: json['is_expiring_soon'] as bool?,
     );
   }
 
@@ -135,6 +167,12 @@ class Chemical {
       'safety_precautions': safetyPrecautions,
       'safety_info': safetyInfo,
       'msds_link': msdsLink,
+      // Stock tracking fields
+      'initial_quantity': initialQuantity,
+      'reorder_level': reorderLevel,
+      'supplier': supplier,
+      'purchase_date': purchaseDate?.toIso8601String(),
+      'cost_per_unit': costPerUnit,
     };
   }
 }

@@ -37,6 +37,13 @@ CREATE TABLE chemicals (
     safety_info TEXT,
     msds_link VARCHAR(500),
 
+    -- Stock tracking fields
+    initial_quantity DECIMAL(10,2) DEFAULT 0,
+    reorder_level DECIMAL(10,2) DEFAULT 10,
+    supplier VARCHAR(100),
+    purchase_date DATE,
+    cost_per_unit DECIMAL(10,2),
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -230,3 +237,6 @@ CREATE INDEX idx_chatbot_audit_created ON chatbot_audit_log(created_at);
 
 -- Update existing records to have default values
 UPDATE borrowings SET status = 'pending' WHERE status IS NULL;
+
+-- Update existing chemicals records with initial_quantity = current quantity
+UPDATE chemicals SET initial_quantity = quantity WHERE initial_quantity = 0;

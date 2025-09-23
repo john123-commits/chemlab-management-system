@@ -184,8 +184,8 @@ class ChemicalDetailsScreen extends StatelessWidget {
                     ]..removeWhere((widget) =>
                         widget == const SizedBox(height: 12) &&
                         widget ==
-                            (Column(children: []).children.isNotEmpty
-                                ? (Column(children: []).children.last)
+                            (const Column(children: []).children.isNotEmpty
+                                ? (const Column(children: []).children.last)
                                 : null)),
                   ),
                 ),
@@ -232,8 +232,8 @@ class ChemicalDetailsScreen extends StatelessWidget {
                     ]..removeWhere((widget) =>
                         widget == const SizedBox(height: 12) &&
                         widget ==
-                            (Column(children: []).children.isNotEmpty
-                                ? (Column(children: []).children.last)
+                            (const Column(children: []).children.isNotEmpty
+                                ? (Column(children: const []).children.last)
                                 : null)),
                   ),
                 ),
