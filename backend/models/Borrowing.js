@@ -516,6 +516,26 @@ class Borrowing {
       throw error;
     }
   }
+
+  static async count(filters = {}) {
+    let query = 'SELECT COUNT(*) as count FROM borrowings WHERE 1=1';
+    const params = [];
+    let paramIndex = 1;
+
+    if (filters.where) {
+      if (filters.where.status) {
+        query += ` AND status = $${paramIndex}`;
+        params.push(filters.where.status);
+        paramIndex++;
+      }
+      if (filters.where.deleted_at) {
+        query += ` AND deleted_at IS NULL`;
+      }
+    }
+
+    const result = await db.query(query, params);
+    return parseInt(result.rows[0].count);
+  }
 }
 
 module.exports = Borrowing;

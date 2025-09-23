@@ -191,7 +191,7 @@ static async getFilteredChemicals(filters = {}) {
 
 static async getStockAnalysis() {
   const result = await db.query(`
-    SELECT 
+    SELECT
       COUNT(*) as total_chemicals,
       COUNT(*) FILTER (WHERE quantity <= reorder_level) as low_stock_count,
       COUNT(*) FILTER (WHERE expiry_date <= CURRENT_DATE + INTERVAL '30 days') as expiring_soon_count,
@@ -200,6 +200,21 @@ static async getStockAnalysis() {
     FROM chemicals
   `);
   return result.rows[0];
+}
+
+static async count(filters = {}) {
+  let query = 'SELECT COUNT(*) as count FROM chemicals WHERE 1=1';
+  const params = [];
+  let paramIndex = 1;
+
+  if (filters.where) {
+    if (filters.where.deleted_at) {
+      query += ` AND deleted_at IS NULL`;
+    }
+  }
+
+  const result = await db.query(query, params);
+  return parseInt(result.rows[0].count);
 }
 }
 

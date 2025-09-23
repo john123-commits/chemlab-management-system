@@ -5,6 +5,7 @@ const Borrowing = require('../models/Borrowing');
 const PDFDocument = require('pdfkit');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const { authenticateToken, requireAdminOrTechnician } = require('../middleware/auth');
+const db = require('../config/db');
 const router = express.Router();
 
 // Get monthly report
@@ -217,14 +218,33 @@ router.get('/monthly', authenticateToken, requireAdminOrTechnician, async (req, 
 // Export report as PDF
 router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res) => {
   try {
+    console.log('Starting PDF generation...');
+
+    // Test database connection first
+    try {
+      await db.query('SELECT 1');
+      console.log('Database connection successful');
+    } catch (dbError) {
+      console.error('Database connection failed:', dbError);
+      throw new Error('Database connection failed: ' + dbError.message);
+    }
+
     const expiringChemicals = await Chemical.getExpiringSoon();
+    console.log('Found expiring chemicals:', expiringChemicals.length);
+
     const lowStockChemicals = await Chemical.getLowStock();
+    console.log('Found low stock chemicals:', lowStockChemicals.length);
+
     const dueEquipment = await Equipment.getDueForMaintenance();
+    console.log('Found due equipment:', dueEquipment.length);
+
     const overdueBorrowings = await Borrowing.getOverdue();
-    
+    console.log('Found overdue borrowings:', overdueBorrowings.length);
+
     // Use the same logic as monthly report for consistent counts
     let pendingBorrowings = await Borrowing.count({ where: { status: 'pending', deleted_at: null } });
-    
+    console.log('Pending borrowings count:', pendingBorrowings);
+
     // If no pending found, try other status values
     if (pendingBorrowings === 0) {
       const allBorrowings = await Borrowing.findAll({
@@ -232,13 +252,15 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
         where: { deleted_at: null },
         raw: true
       });
-      
+
       const statusCounts = {};
       allBorrowings.forEach(borrowing => {
         const status = borrowing.status;
         statusCounts[status] = (statusCounts[status] || 0) + 1;
       });
-      
+
+      console.log('All borrowing statuses:', statusCounts);
+
       // Use same logic as monthly report
       if (statusCounts['submitted'] > 0) {
         pendingBorrowings = statusCounts['submitted'];
@@ -248,7 +270,7 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
         pendingBorrowings = statusCounts['awaiting_approval'];
       }
     }
-    
+
     const report = {
       summary: {
         totalChemicals: await Chemical.count({ where: { deleted_at: null } }),
@@ -262,21 +284,23 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
       dueEquipment,
       overdueBorrowings
     };
-    
+
+    console.log('Report data prepared:', report.summary);
+
     const doc = new PDFDocument();
     const filename = `chemlab-report-${new Date().toISOString().split('T')[0]}.pdf`;
-    
+
     res.setHeader('Content-disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-type', 'application/pdf');
-    
+
     doc.pipe(res);
-    
+
     doc.fontSize(20).text('ChemLab Management System - Monthly Report', { align: 'center' });
     doc.moveDown();
-    
+
     doc.fontSize(14).text(`Report Date: ${new Date().toLocaleDateString()}`);
     doc.moveDown();
-    
+
     doc.fontSize(16).text('Summary:');
     doc.fontSize(12).text(`Total Chemicals: ${report.summary.totalChemicals}`);
     doc.text(`Total Equipment: ${report.summary.totalEquipment}`);
@@ -284,7 +308,7 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
     doc.text(`Pending Borrowings: ${report.summary.pendingBorrowings}`);
     doc.text(`Overdue Borrowings: ${report.summary.overdueBorrowings}`);
     doc.moveDown();
-    
+
     doc.fontSize(16).text('Expiring Chemicals:');
     if (report.expiringChemicals.length === 0) {
       doc.fontSize(12).text('No expiring chemicals.');
@@ -294,7 +318,7 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
       });
     }
     doc.moveDown();
-    
+
     doc.fontSize(16).text('Low Stock Chemicals:');
     if (report.lowStockChemicals.length === 0) {
       doc.fontSize(12).text('No low stock chemicals.');
@@ -304,7 +328,7 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
       });
     }
     doc.moveDown();
-    
+
     doc.fontSize(16).text('Equipment Due for Maintenance:');
     if (report.dueEquipment.length === 0) {
       doc.fontSize(12).text('No equipment due for maintenance.');
@@ -314,7 +338,7 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
       });
     }
     doc.moveDown();
-    
+
     doc.fontSize(16).text('Overdue Borrowings:');
     if (report.overdueBorrowings.length === 0) {
       doc.fontSize(12).text('No overdue borrowings.');
@@ -323,11 +347,17 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
         doc.fontSize(12).text(`• Borrower: ${borrow.borrower_name} - Return Date: ${new Date(borrow.return_date).toLocaleDateString()}`);
       });
     }
-    
+
     doc.end();
+    console.log('PDF generation completed successfully');
   } catch (error) {
     console.error('Error generating PDF report:', error);
-    res.status(500).json({ error: 'Failed to generate PDF report' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      error: 'Failed to generate PDF report',
+      details: error.message,
+      stack: error.stack
+    });
   }
 });
 
@@ -341,21 +371,20 @@ router.get('/csv', authenticateToken, requireAdminOrTechnician, async (req, res)
     
     // Use the same logic as monthly report for consistent counts
     let pendingBorrowings = await Borrowing.count({ where: { status: 'pending', deleted_at: null } });
-    
+    console.log('Pending borrowings count:', pendingBorrowings);
+
     // If no pending found, try other status values
     if (pendingBorrowings === 0) {
-      const allBorrowings = await Borrowing.findAll({
-        attributes: ['status'],
-        where: { deleted_at: null },
-        raw: true
-      });
-      
+      const allBorrowings = await Borrowing.findAll();
+
       const statusCounts = {};
       allBorrowings.forEach(borrowing => {
         const status = borrowing.status;
         statusCounts[status] = (statusCounts[status] || 0) + 1;
       });
-      
+
+      console.log('All borrowing statuses:', statusCounts);
+
       // Use same logic as monthly report
       if (statusCounts['submitted'] > 0) {
         pendingBorrowings = statusCounts['submitted'];

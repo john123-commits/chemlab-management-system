@@ -722,6 +722,67 @@ class ApiService {
     }
   }
 
+  // Generate and download monthly report PDF
+  static Future<void> generateMonthlyReportPDF() async {
+    final token = await getAuthToken();
+
+    logger.d('Generating monthly report PDF');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/reports/pdf'),
+      headers: getHeaders(token),
+    );
+
+    logger.d('Monthly report PDF response status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final bytes = response.bodyBytes;
+      logger.d('Monthly report PDF bytes received: ${bytes.length} bytes');
+
+      if (bytes.isEmpty) {
+        throw Exception('Received empty PDF file');
+      }
+
+      // Save and open the PDF
+      await _savePdfFileDesktop(bytes);
+    } else {
+      logger.e('Monthly report PDF generation failed: ${response.body}');
+      throw Exception(
+          'Failed to generate monthly report PDF: ${response.body}');
+    }
+  }
+
+  // Generate and download monthly report CSV
+  static Future<void> generateMonthlyReportCSV() async {
+    final token = await getAuthToken();
+
+    logger.d('Generating monthly report CSV');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/reports/csv'),
+      headers: getHeaders(token),
+    );
+
+    logger.d('Monthly report CSV response status: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final csvContent = response.body;
+      logger.d(
+          'Monthly report CSV content received: ${csvContent.length} characters');
+
+      if (csvContent.isEmpty) {
+        throw Exception('Received empty CSV file');
+      }
+
+      // Save the CSV file
+      await _saveCsvFileDesktop(csvContent);
+    } else {
+      logger.e('Monthly report CSV generation failed: ${response.body}');
+      throw Exception(
+          'Failed to generate monthly report CSV: ${response.body}');
+    }
+  }
+
   // Alert endpoints
   static Future<List<dynamic>> getAlerts() async {
     final token = await getAuthToken();
@@ -1363,6 +1424,45 @@ class ApiService {
     } else {
       logger.e('Failed to mark alert as resolved: ${response.body}');
       throw Exception('Failed to mark alert as resolved: ${response.body}');
+    }
+  }
+
+  static Future<void> _saveCsvFileDesktop(String csvContent) async {
+    try {
+      // Get Downloads directory path
+      String downloadsPath;
+
+      if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'];
+        downloadsPath = '$userProfile\\Downloads';
+      } else if (Platform.isMacOS || Platform.isLinux) {
+        final home = Platform.environment['HOME'];
+        downloadsPath = '$home/Downloads';
+      } else {
+        // Fallback to documents directory
+        final directory = await getApplicationDocumentsDirectory();
+        downloadsPath = directory.path;
+      }
+
+      // Create filename with timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'monthly-report-$timestamp.csv';
+      final filePath = '$downloadsPath${Platform.pathSeparator}$fileName';
+
+      // Write CSV to file
+      final file = File(filePath);
+      await file.writeAsString(csvContent);
+
+      logger.d('CSV saved to: $filePath');
+
+      // Try to open the CSV file
+      final uri = Uri.file(filePath);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    } catch (error) {
+      logger.e('Error saving CSV: $error');
+      rethrow;
     }
   }
 }

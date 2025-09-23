@@ -115,14 +115,50 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _exportReport(String format) async {
     try {
-      // In a real implementation, you would download the file
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Report exported as $format')),
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Generating report...'),
+            ],
+          ),
+        ),
       );
+
+      if (format == 'PDF') {
+        await ApiService.generateMonthlyReportPDF();
+      } else if (format == 'CSV') {
+        await ApiService.generateMonthlyReportCSV();
+      }
+
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Report exported as $format successfully!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to export report')),
-      );
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to export report: $error'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 

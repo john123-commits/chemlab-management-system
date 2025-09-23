@@ -134,11 +134,26 @@ static async getEquipmentAnalysis() {
 
   static async getDueForMaintenance(days = 30) {
     const result = await db.query(
-      `SELECT * FROM equipment 
+      `SELECT * FROM equipment
        WHERE last_maintenance_date + INTERVAL '1 day' * maintenance_schedule <= CURRENT_DATE + INTERVAL '${days} days'
        ORDER BY last_maintenance_date ASC`
     );
     return result.rows;
+  }
+
+  static async count(filters = {}) {
+    let query = 'SELECT COUNT(*) as count FROM equipment WHERE 1=1';
+    const params = [];
+    let paramIndex = 1;
+
+    if (filters.where) {
+      if (filters.where.deleted_at) {
+        query += ` AND deleted_at IS NULL`;
+      }
+    }
+
+    const result = await db.query(query, params);
+    return parseInt(result.rows[0].count);
   }
 }
 
