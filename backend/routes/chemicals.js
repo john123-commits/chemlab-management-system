@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const { authenticateToken } = require('../middleware/auth'); // Keep only this import
 const { generateChemicalsPDF } = require('../controllers/pdfController');
+const UsageController = require('../controllers/usageController');
 const router = express.Router();
 
 // Configure multer for file uploads
@@ -88,5 +89,13 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
 // Generate PDF report
 router.post('/generate-pdf', authenticateToken, generateChemicalsPDF);
+
+// Usage tracking routes
+router.post('/:chemical_id/usage', authenticateToken, UsageController.logUsage);
+router.get('/:chemical_id/usage', authenticateToken, UsageController.getChemicalUsageHistory);
+
+// Usage summary routes (add to a separate usage routes file if preferred)
+router.get('/usage/logs', authenticateToken, UsageController.getAllUsageLogs);
+router.get('/usage/summary', authenticateToken, UsageController.getUsageSummary);
 
 module.exports = router;

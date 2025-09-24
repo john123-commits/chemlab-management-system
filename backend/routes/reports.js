@@ -72,6 +72,40 @@ router.get('/monthly', authenticateToken, requireAdminOrTechnician, async (req, 
     } catch (error) {
       console.warn('Could not get overdue borrowings:', error.message);
     }
+
+    // Get usage analytics data
+    let usageAnalytics = [];
+    let recentUsageActivity = [];
+    let usageByCategory = [];
+    let topUsedChemicals = [];
+
+    try {
+      usageAnalytics = await Chemical.getUsageAnalytics();
+      console.log('Found usage analytics for', usageAnalytics.length, 'chemicals');
+    } catch (error) {
+      console.warn('Could not get usage analytics:', error.message);
+    }
+
+    try {
+      recentUsageActivity = await Chemical.getRecentUsageActivity(7);
+      console.log('Found recent usage activity:', recentUsageActivity.length, 'entries');
+    } catch (error) {
+      console.warn('Could not get recent usage activity:', error.message);
+    }
+
+    try {
+      usageByCategory = await Chemical.getUsageByCategory();
+      console.log('Found usage by category for', usageByCategory.length, 'categories');
+    } catch (error) {
+      console.warn('Could not get usage by category:', error.message);
+    }
+
+    try {
+      topUsedChemicals = await Chemical.getTopUsedChemicals(5);
+      console.log('Found top used chemicals:', topUsedChemicals.length);
+    } catch (error) {
+      console.warn('Could not get top used chemicals:', error.message);
+    }
     
     // Get counts safely using proper count methods
     let totalChemicals = 0;
@@ -212,18 +246,33 @@ router.get('/monthly', authenticateToken, requireAdminOrTechnician, async (req, 
       pendingBorrowings = 0;
     }
     
+    // Calculate usage statistics for summary
+    const totalUsageEntries = usageAnalytics.reduce((sum, chem) => sum + parseInt(chem.usage_entries_count || 0), 0);
+    const totalQuantityUsed = usageAnalytics.reduce((sum, chem) => sum + parseFloat(chem.total_usage_logged || 0), 0);
+    const chemicalsWithUsage = usageAnalytics.filter(chem => parseInt(chem.usage_entries_count || 0) > 0).length;
+
     const report = {
       summary: {
         totalChemicals: totalChemicals,
         totalEquipment: totalEquipment,
         activeBorrowings: activeBorrowings,
         pendingBorrowings: pendingBorrowings,
-        overdueBorrowings: overdueBorrowingsCount
+        overdueBorrowings: overdueBorrowingsCount,
+        // Usage statistics
+        totalUsageEntries: totalUsageEntries,
+        totalQuantityUsed: totalQuantityUsed,
+        chemicalsWithUsage: chemicalsWithUsage,
+        averageUsagePerChemical: chemicalsWithUsage > 0 ? totalQuantityUsed / chemicalsWithUsage : 0
       },
       expiringChemicals,
       lowStockChemicals,
       dueEquipment,
-      overdueBorrowings
+      overdueBorrowings,
+      // Usage analytics
+      usageAnalytics,
+      recentUsageActivity,
+      usageByCategory,
+      topUsedChemicals
     };
     
     console.log('Monthly report summary:', report.summary);
@@ -263,6 +312,12 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
     const overdueBorrowings = await Borrowing.getOverdue();
     console.log('Found overdue borrowings:', overdueBorrowings.length);
 
+    // Get usage analytics for PDF
+    const usageAnalytics = await Chemical.getUsageAnalytics();
+    const recentUsageActivity = await Chemical.getRecentUsageActivity(7);
+    const usageByCategory = await Chemical.getUsageByCategory();
+    const topUsedChemicals = await Chemical.getTopUsedChemicals(5);
+
     // Use the same logic as monthly report for consistent counts
     let pendingBorrowings = await Borrowing.count({ where: { status: 'pending', deleted_at: null } });
 
@@ -292,18 +347,33 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
 
     const activeBorrowingsCount = await Borrowing.count({ where: { status: 'approved', deleted_at: null } });
 
+    // Calculate usage statistics for PDF
+    const totalUsageEntries = usageAnalytics.reduce((sum, chem) => sum + parseInt(chem.usage_entries_count || 0), 0);
+    const totalQuantityUsed = usageAnalytics.reduce((sum, chem) => sum + parseFloat(chem.total_usage_logged || 0), 0);
+    const chemicalsWithUsage = usageAnalytics.filter(chem => parseInt(chem.usage_entries_count || 0) > 0).length;
+
     const report = {
       summary: {
         totalChemicals: await Chemical.count({ where: { deleted_at: null } }),
         totalEquipment: await Equipment.count({ where: { deleted_at: null } }),
         activeBorrowings: activeBorrowingsCount,
         pendingBorrowings: pendingBorrowings,
-        overdueBorrowings: overdueBorrowings.length
+        overdueBorrowings: overdueBorrowings.length,
+        // Usage statistics
+        totalUsageEntries: totalUsageEntries,
+        totalQuantityUsed: totalQuantityUsed,
+        chemicalsWithUsage: chemicalsWithUsage,
+        averageUsagePerChemical: chemicalsWithUsage > 0 ? totalQuantityUsed / chemicalsWithUsage : 0
       },
       expiringChemicals,
       lowStockChemicals,
       dueEquipment,
-      overdueBorrowings
+      overdueBorrowings,
+      // Usage analytics
+      usageAnalytics,
+      recentUsageActivity,
+      usageByCategory,
+      topUsedChemicals
     };
 
     console.log('Report data prepared:', report.summary);
@@ -729,15 +799,183 @@ router.get('/pdf', authenticateToken, requireAdminOrTechnician, async (req, res)
     }
 
     // ========================================
-    // RECOMMENDATIONS (MOVED UP)
+    // 4. CHEMICAL USAGE ANALYTICS
     // ========================================
     doc.fontSize(16)
-       .fillColor('#2c3e50')
-       .text('Key Recommendations', 50, 580);
+        .fillColor('#2c3e50')
+        .text('Chemical Usage Analytics', 50, 580);
 
-    let recY = 605;
+    const usageTotalEntries = report.summary.totalUsageEntries;
+    const usageTotalQuantity = report.summary.totalQuantityUsed;
+    const usageChemicalsCount = report.summary.chemicalsWithUsage;
+
+    if (usageTotalEntries > 0) {
+      const usageBarY = 605;
+      const usageBarWidth = 300;
+      const usageBarHeight = 25;
+
+      // Calculate segments for usage visualization
+      const activeUsageWidth = (usageChemicalsCount / report.summary.totalChemicals) * usageBarWidth;
+      const noUsageWidth = ((report.summary.totalChemicals - usageChemicalsCount) / report.summary.totalChemicals) * usageBarWidth;
+
+      let currentX = 80;
+
+      // Chemicals with usage segment
+      if (usageChemicalsCount > 0) {
+        doc.rect(currentX, usageBarY, activeUsageWidth, usageBarHeight)
+           .fillColor('#27ae60')
+           .fill();
+        currentX += activeUsageWidth;
+      }
+
+      // Chemicals without usage segment
+      if (report.summary.totalChemicals - usageChemicalsCount > 0) {
+        doc.rect(currentX, usageBarY, noUsageWidth, usageBarHeight)
+           .fillColor('#95a5a6')
+           .fill();
+      }
+
+      // Border
+      doc.rect(80, usageBarY, usageBarWidth, usageBarHeight)
+         .strokeColor('#2c3e50')
+         .lineWidth(1)
+         .stroke();
+
+      // Usage legend
+      const usageLegendY = usageBarY + 35;
+      doc.rect(80, usageLegendY, 8, 8).fillColor('#27ae60').fill();
+      doc.fontSize(8).fillColor('#2c3e50').text(`Used: ${usageChemicalsCount}`, 92, usageLegendY + 1);
+
+      doc.rect(150, usageLegendY, 8, 8).fillColor('#95a5a6').fill();
+      doc.fontSize(8).text(`Unused: ${report.summary.totalChemicals - usageChemicalsCount}`, 162, usageLegendY + 1);
+
+      // Usage statistics
+      doc.fontSize(10)
+         .fillColor('#2c3e50')
+         .text(`Total Usage Entries: ${usageTotalEntries}`, 80, usageLegendY + 20);
+      doc.text(`Total Quantity Used: ${usageTotalQuantity.toFixed(2)}`, 80, usageLegendY + 35);
+      doc.text(`Average Usage per Chemical: ${report.summary.averageUsagePerChemical.toFixed(2)}`, 80, usageLegendY + 50);
+    } else {
+      doc.fontSize(12)
+         .fillColor('#7f8c8d')
+         .text('No usage data available', 50, 605);
+    }
+
+    // ========================================
+    // TOP USED CHEMICALS TABLE
+    // ========================================
+    doc.fontSize(16)
+        .fillColor('#2c3e50')
+        .text('Top Used Chemicals', 50, 720);
+
+    if (report.topUsedChemicals.length > 0) {
+      const tableStartY = 745;
+      const rowHeight = 20;
+      const colWidths = [200, 50, 80, 80, 80];
+
+      // Table header
+      doc.fontSize(10)
+         .fillColor('#2c3e50')
+         .text('Chemical Name', 50, tableStartY)
+         .text('Unit', 50 + colWidths[0], tableStartY)
+         .text('Total Used', 50 + colWidths[0] + colWidths[1], tableStartY)
+         .text('Usage Count', 50 + colWidths[0] + colWidths[1] + colWidths[2], tableStartY)
+         .text('Current Stock', 50 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], tableStartY);
+
+      // Header line
+      doc.moveTo(50, tableStartY + 15)
+         .lineTo(50 + colWidths.reduce((a, b) => a + b, 0), tableStartY + 15)
+         .strokeColor('#2c3e50')
+         .lineWidth(1)
+         .stroke();
+
+      // Table rows
+      report.topUsedChemicals.forEach((chemical, index) => {
+        const y = tableStartY + 20 + (index * rowHeight);
+        doc.fontSize(9)
+           .fillColor('#2c3e50')
+           .text(chemical.name || 'N/A', 50, y)
+           .text(chemical.unit || 'N/A', 50 + colWidths[0], y)
+           .text(parseFloat(chemical.total_used || 0).toFixed(2), 50 + colWidths[0] + colWidths[1], y)
+           .text(chemical.usage_count || 0, 50 + colWidths[0] + colWidths[1] + colWidths[2], y)
+           .text(parseFloat(chemical.current_stock || 0).toFixed(2), 50 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], y);
+      });
+    } else {
+      doc.fontSize(12)
+         .fillColor('#7f8c8d')
+         .text('No chemical usage data available', 50, 745);
+    }
+
+    // ========================================
+    // RECOMMENDATIONS (MOVED DOWN)
+    // ========================================
+    doc.addPage({ margin: 40 });
+
+    doc.fontSize(20)
+        .fillColor('#2c3e50')
+        .text('Key Recommendations & Insights', 50, 50, { align: 'center' });
+
+    // Horizontal line
+    doc.moveTo(50, 80)
+        .lineTo(550, 80)
+        .strokeColor('#bdc3c7')
+        .lineWidth(2)
+        .stroke();
+
+    let recY = 110;
     let hasRecommendations = false;
 
+    // Usage-based recommendations
+    if (report.summary.chemicalsWithUsage === 0) {
+      doc.fontSize(10)
+         .fillColor('#f39c12')
+         .text('•', 55, recY);
+      doc.fillColor('#2c3e50')
+         .text('No chemical usage recorded - Consider implementing usage tracking', 70, recY);
+      recY += 15;
+      hasRecommendations = true;
+    } else if (report.summary.chemicalsWithUsage < report.summary.totalChemicals * 0.5) {
+      doc.fontSize(10)
+         .fillColor('#f39c12')
+         .text('•', 55, recY);
+      doc.fillColor('#2c3e50')
+         .text(`Only ${report.summary.chemicalsWithUsage} of ${report.summary.totalChemicals} chemicals have usage records - Encourage more comprehensive tracking`, 70, recY);
+      recY += 15;
+      hasRecommendations = true;
+    }
+
+    // High usage chemicals
+    const highUsageChemicals = report.topUsedChemicals.filter(chem => parseFloat(chem.total_used || 0) > 100);
+    if (highUsageChemicals.length > 0) {
+      doc.fontSize(10)
+         .fillColor('#3498db')
+         .text('•', 55, recY);
+      doc.fillColor('#2c3e50')
+         .text(`${highUsageChemicals.length} chemical(s) show high usage - Monitor stock levels closely`, 70, recY);
+      recY += 15;
+      hasRecommendations = true;
+    }
+
+    // Recent usage activity
+    if (report.recentUsageActivity.length === 0) {
+      doc.fontSize(10)
+         .fillColor('#95a5a6')
+         .text('•', 55, recY);
+      doc.fillColor('#2c3e50')
+         .text('No recent usage activity in the past week', 70, recY);
+      recY += 15;
+      hasRecommendations = true;
+    } else {
+      doc.fontSize(10)
+         .fillColor('#27ae60')
+         .text('•', 55, recY);
+      doc.fillColor('#2c3e50')
+         .text(`${report.recentUsageActivity.length} usage entries recorded in the past week - Good tracking activity`, 70, recY);
+      recY += 15;
+      hasRecommendations = true;
+    }
+
+    // Existing recommendations
     if (report.lowStockChemicals.length > 0) {
       doc.fontSize(10)
          .fillColor('#e74c3c')
@@ -820,6 +1058,10 @@ router.get('/csv', authenticateToken, requireAdminOrTechnician, async (req, res)
     const lowStockChemicals = await Chemical.getLowStock();
     const dueEquipment = await Equipment.getDueForMaintenance();
     const overdueBorrowings = await Borrowing.getOverdue();
+    const usageAnalytics = await Chemical.getUsageAnalytics();
+    const recentUsageActivity = await Chemical.getRecentUsageActivity(7);
+    const usageByCategory = await Chemical.getUsageByCategory();
+    const topUsedChemicals = await Chemical.getTopUsedChemicals(5);
     
     // Use the same logic as monthly report for consistent counts
     let pendingBorrowings = await Borrowing.count({ where: { status: 'pending', deleted_at: null } });
@@ -920,13 +1162,50 @@ router.get('/csv', authenticateToken, requireAdminOrTechnician, async (req, res)
       });
     }
     
+    // Add usage analytics to CSV
+    const totalUsageEntries = usageAnalytics.reduce((sum, chem) => sum + parseInt(chem.usage_entries_count || 0), 0);
+    const totalQuantityUsed = usageAnalytics.reduce((sum, chem) => sum + parseFloat(chem.total_usage_logged || 0), 0);
+    const chemicalsWithUsage = usageAnalytics.filter(chem => parseInt(chem.usage_entries_count || 0) > 0).length;
+
+    csvContent += `"Usage Analytics","Total Usage Entries","${totalUsageEntries}","Info","Low"\n`;
+    csvContent += `"Usage Analytics","Total Quantity Used","${totalQuantityUsed.toFixed(2)}","Info","Low"\n`;
+    csvContent += `"Usage Analytics","Chemicals with Usage","${chemicalsWithUsage}","Info","Low"\n`;
+    csvContent += `"Usage Analytics","Usage Coverage Rate","${totalChemicals > 0 ? Math.round((chemicalsWithUsage / totalChemicals) * 100) : 0}%","${(chemicalsWithUsage / totalChemicals) >= 0.5 ? 'Good' : 'Warning'}","${(chemicalsWithUsage / totalChemicals) >= 0.5 ? 'Low' : 'Medium'}"\n`;
+
+    // Add top used chemicals
+    if (topUsedChemicals.length > 0) {
+      csvContent += `"Top Used Chemicals","Chemical Name","Total Used","Usage Count","Current Stock","Status"\n`;
+      topUsedChemicals.forEach(chem => {
+        const usageRate = parseFloat(chem.current_stock || 0) > 0 ? (parseFloat(chem.total_used || 0) / parseFloat(chem.current_stock || 0)) * 100 : 0;
+        const status = usageRate > 200 ? 'High Usage' : usageRate > 100 ? 'Moderate Usage' : 'Low Usage';
+        csvContent += `"Top Used Chemicals","${chem.name || 'N/A'}","${parseFloat(chem.total_used || 0).toFixed(2)}","${chem.usage_count || 0}","${parseFloat(chem.current_stock || 0).toFixed(2)}","${status}"\n`;
+      });
+    }
+
+    // Add recent usage activity
+    if (recentUsageActivity.length > 0) {
+      csvContent += `"Recent Usage Activity","Chemical","Quantity Used","Date","Purpose","User","Experiment Reference"\n`;
+      recentUsageActivity.forEach(activity => {
+        csvContent += `"Recent Usage Activity","${activity.chemical_name || 'N/A'}","${activity.quantity_used || 0}","${new Date(activity.usage_date).toLocaleDateString()}","${activity.purpose || 'N/A'}","${activity.user_name || 'N/A'}","${activity.experiment_reference || 'N/A'}"\n`;
+      });
+    }
+
+    // Add usage by category
+    if (usageByCategory.length > 0) {
+      csvContent += `"Usage by Category","Category","Chemicals Count","Total Used","Usage Entries","Avg Usage per Chemical"\n`;
+      usageByCategory.forEach(category => {
+        const avgUsage = category.chemicals_count > 0 ? parseFloat(category.total_usage_logged || 0) / category.chemicals_count : 0;
+        csvContent += `"Usage by Category","${category.category || 'N/A'}","${category.chemicals_count || 0}","${parseFloat(category.total_usage_logged || 0).toFixed(2)}","${category.total_usage_entries || 0}","${avgUsage.toFixed(2)}"\n`;
+      });
+    }
+
     // Add analytics summary
     const totalChemicals = report.summary.totalChemicals;
     const normalChemicals = totalChemicals - report.expiringChemicals.length - report.lowStockChemicals.length;
     const chemicalHealthScore = totalChemicals > 0 ? Math.round((normalChemicals / totalChemicals) * 100) : 0;
-    
+
     csvContent += `"Analytics","Chemical Health Score","${chemicalHealthScore}%","${chemicalHealthScore >= 80 ? 'Good' : chemicalHealthScore >= 60 ? 'Warning' : 'Critical'}","${chemicalHealthScore >= 80 ? 'Low' : chemicalHealthScore >= 60 ? 'Medium' : 'High'}"\n`;
-    
+
     const equipmentHealthScore = report.summary.totalEquipment > 0 ? Math.round(((report.summary.totalEquipment - report.dueEquipment.length) / report.summary.totalEquipment) * 100) : 100;
     csvContent += `"Analytics","Equipment Health Score","${equipmentHealthScore}%","${equipmentHealthScore >= 80 ? 'Good' : equipmentHealthScore >= 60 ? 'Warning' : 'Critical'}","${equipmentHealthScore >= 80 ? 'Low' : equipmentHealthScore >= 60 ? 'Medium' : 'High'}"\n`;
     

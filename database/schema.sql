@@ -44,7 +44,12 @@ CREATE TABLE chemicals (
     purchase_date DATE,
     cost_per_unit DECIMAL(10,2),
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    -- Usage tracking fields
+    last_used_date TIMESTAMP,
+    total_used DECIMAL(10,2) DEFAULT 0,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Equipment table
@@ -112,9 +117,27 @@ CREATE TABLE lecture_schedules (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Chemical Usage Logs table for tracking chemical consumption
+CREATE TABLE chemical_usage_logs (
+   id SERIAL PRIMARY KEY,
+   chemical_id INTEGER NOT NULL REFERENCES chemicals(id) ON DELETE CASCADE,
+   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+   quantity_used DECIMAL(10,2) NOT NULL,
+   remaining_quantity DECIMAL(10,2) NOT NULL,
+   usage_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   purpose VARCHAR(255),
+   notes TEXT,
+   experiment_reference VARCHAR(100),
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_chemicals_category ON chemicals(category);
 CREATE INDEX idx_chemicals_expiry ON chemicals(expiry_date);
+CREATE INDEX idx_chemical_usage_chemical_id ON chemical_usage_logs(chemical_id);
+CREATE INDEX idx_chemical_usage_user_id ON chemical_usage_logs(user_id);
+CREATE INDEX idx_chemical_usage_date ON chemical_usage_logs(usage_date);
 CREATE INDEX idx_equipment_category ON equipment(category);
 CREATE INDEX idx_equipment_maintenance ON equipment(last_maintenance_date);
 CREATE INDEX idx_borrowings_status ON borrowings(status);
@@ -145,9 +168,35 @@ CREATE TRIGGER update_borrowings_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_lecture_schedules_updated_at 
-    BEFORE UPDATE ON lecture_schedules 
-    FOR EACH ROW 
+CREATE TRIGGER update_lecture_schedules_updated_at
+    BEFORE UPDATE ON lecture_schedules
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create trigger to update chemicals table when usage is logged
+CREATE OR REPLACE FUNCTION update_chemical_after_usage()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE chemicals
+    SET
+        quantity = NEW.remaining_quantity,
+        last_used_date = NEW.usage_date,
+        total_used = COALESCE(total_used, 0) + NEW.quantity_used,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = NEW.chemical_id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_chemical_after_usage
+    AFTER INSERT ON chemical_usage_logs
+    FOR EACH ROW
+    EXECUTE FUNCTION update_chemical_after_usage();
+
+-- Create trigger for chemical_usage_logs updated_at
+CREATE TRIGGER update_chemical_usage_logs_updated_at
+    BEFORE UPDATE ON chemical_usage_logs
+    FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Chat conversations and messages tables for live chat feature

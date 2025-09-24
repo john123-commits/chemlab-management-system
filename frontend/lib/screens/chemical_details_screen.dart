@@ -4,6 +4,8 @@ import 'package:chemlab_frontend/models/chemical.dart';
 import 'package:chemlab_frontend/providers/auth_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:chemlab_frontend/screens/chemical_usage_log_screen.dart';
+import 'package:chemlab_frontend/screens/usage_history_screen.dart';
 
 class ChemicalDetailsScreen extends StatelessWidget {
   final Chemical chemical;
@@ -252,6 +254,75 @@ class ChemicalDetailsScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: _buildStatusCard(chemical),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Quick Actions Section with Usage Logging
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ChemicalUsageLogScreen(
+                                    chemical: chemical,
+                                  ),
+                                ),
+                              );
+
+                              if (result == true) {
+                                // Refresh chemical data here if needed
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Chemical usage logged successfully'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.remove_circle_outline),
+                            label: const Text('Log Usage'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => UsageHistoryScreen(
+                                    chemical: chemical,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.history),
+                            label: const Text('Usage History'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),

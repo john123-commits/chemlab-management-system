@@ -216,6 +216,90 @@ static async count(filters = {}) {
   const result = await db.query(query, params);
   return parseInt(result.rows[0].count);
 }
+
+static async getUsageAnalytics() {
+  const result = await db.query(`
+    SELECT
+      c.id,
+      c.name,
+      c.unit,
+      c.quantity as current_quantity,
+      c.total_used,
+      c.last_used_date,
+      COALESCE(SUM(cul.quantity_used), 0) as total_usage_logged,
+      COUNT(cul.id) as usage_entries_count,
+      AVG(cul.quantity_used) as average_usage_per_entry,
+      MAX(cul.usage_date) as latest_usage_date,
+      MIN(cul.usage_date) as first_usage_date
+    FROM chemicals c
+    LEFT JOIN chemical_usage_logs cul ON c.id = cul.chemical_id
+    GROUP BY c.id, c.name, c.unit, c.quantity, c.total_used, c.last_used_date
+    ORDER BY total_usage_logged DESC
+  `);
+  return result.rows;
+}
+
+static async getRecentUsageActivity(days = 7) {
+  const result = await db.query(`
+    SELECT
+      c.name as chemical_name,
+      c.unit,
+      cul.quantity_used,
+      cul.usage_date,
+      cul.purpose,
+      u.name as user_name,
+      cul.experiment_reference
+    FROM chemical_usage_logs cul
+    JOIN chemicals c ON cul.chemical_id = c.id
+    JOIN users u ON cul.user_id = u.id
+    WHERE cul.usage_date >= CURRENT_DATE - INTERVAL '${days} days'
+    ORDER BY cul.usage_date DESC
+    LIMIT 20
+  `);
+  return result.rows;
+}
+
+static async getUsageByCategory() {
+  const result = await db.query(`
+    SELECT
+      c.category,
+      COUNT(DISTINCT c.id) as chemicals_count,
+      SUM(c.total_used) as total_used_in_category,
+      SUM(cul.total_quantity_used) as total_usage_logged,
+      COUNT(cul.usage_count) as total_usage_entries
+    FROM chemicals c
+    LEFT JOIN (
+      SELECT
+        chemical_id,
+        SUM(quantity_used) as total_quantity_used,
+        COUNT(*) as usage_count
+      FROM chemical_usage_logs
+      GROUP BY chemical_id
+    ) cul ON c.id = cul.chemical_id
+    GROUP BY c.category
+    ORDER BY total_usage_logged DESC
+  `);
+  return result.rows;
+}
+
+static async getTopUsedChemicals(limit = 10) {
+  const result = await db.query(`
+    SELECT
+      c.name,
+      c.unit,
+      c.category,
+      COALESCE(SUM(cul.quantity_used), 0) as total_used,
+      COUNT(cul.id) as usage_count,
+      MAX(cul.usage_date) as last_used,
+      c.quantity as current_stock
+    FROM chemicals c
+    LEFT JOIN chemical_usage_logs cul ON c.id = cul.chemical_id
+    GROUP BY c.id, c.name, c.unit, c.category, c.quantity
+    ORDER BY total_used DESC
+    LIMIT $1
+  `, [limit]);
+  return result.rows;
+}
 }
 
 module.exports = Chemical;

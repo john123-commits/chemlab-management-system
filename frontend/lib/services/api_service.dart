@@ -1465,4 +1465,87 @@ class ApiService {
       rethrow;
     }
   }
+
+  // Chemical Usage Logging Methods
+  // Log chemical usage
+  static Future<Map<String, dynamic>> logChemicalUsage(
+      int chemicalId, Map<String, dynamic> usageData) async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/chemicals/$chemicalId/usage'),
+      headers: getHeaders(token),
+      body: jsonEncode(usageData),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final errorData = jsonDecode(response.body);
+      throw Exception(errorData['message'] ?? 'Failed to log usage');
+    }
+  }
+
+  // Get usage history for a chemical
+  static Future<Map<String, dynamic>> getChemicalUsageHistory(int chemicalId,
+      {int limit = 50, int offset = 0}) async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final response = await http.get(
+      Uri.parse(
+          '$baseUrl/chemicals/$chemicalId/usage?limit=$limit&offset=$offset'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch usage history');
+    }
+  }
+
+  // Get all usage logs (admin)
+  static Future<Map<String, dynamic>> getAllUsageLogs(
+      {int limit = 100, int offset = 0}) async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/chemicals/usage/logs?limit=$limit&offset=$offset'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch usage logs');
+    }
+  }
+
+  // Get usage summary for dashboard
+  static Future<Map<String, dynamic>> getUsageSummary() async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/chemicals/usage/summary'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch usage summary');
+    }
+  }
 }
