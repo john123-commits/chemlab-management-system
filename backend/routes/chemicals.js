@@ -5,6 +5,7 @@ const path = require('path');
 const { authenticateToken } = require('../middleware/auth'); // Keep only this import
 const { generateChemicalsPDF } = require('../controllers/pdfController');
 const UsageController = require('../controllers/usageController');
+const ExcelController = require('../controllers/excelController');
 const router = express.Router();
 
 // Configure multer for file uploads
@@ -89,6 +90,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
 // Generate PDF report
 router.post('/generate-pdf', authenticateToken, generateChemicalsPDF);
+
+// Generate Excel order list
+router.post('/generate-order-list', authenticateToken, ExcelController.generateOrderList);
 
 // Usage tracking routes
 router.post('/:chemical_id/usage', authenticateToken, UsageController.logUsage);

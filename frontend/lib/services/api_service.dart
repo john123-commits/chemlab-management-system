@@ -13,6 +13,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 
 var logger = Logger();
 
@@ -1324,6 +1325,60 @@ class ApiService {
     } catch (error) {
       logger.e('Error saving Equipment PDF: $error');
       rethrow;
+    }
+  }
+
+  // Generate Excel order list for chemicals that need reordering
+  static Future<void> generateOrderListExcel() async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/chemicals/generate-order-list'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      final bytes = response.bodyBytes;
+      if (bytes.isEmpty) {
+        throw Exception('Received empty Excel file');
+      }
+      await _saveExcelToDownloads(bytes);
+    } else {
+      throw Exception('Failed to generate Excel order list: ${response.body}');
+    }
+  }
+
+  static Future<void> _saveExcelToDownloads(Uint8List bytes) async {
+    try {
+      String downloadsPath;
+
+      if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'];
+        downloadsPath = '$userProfile\\Downloads';
+      } else if (Platform.isMacOS || Platform.isLinux) {
+        final home = Platform.environment['HOME'];
+        downloadsPath = '$home/Downloads';
+      } else {
+        final directory = await getApplicationDocumentsDirectory();
+        downloadsPath = directory.path;
+      }
+
+      final timestamp = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final fileName = 'Chemical_Order_List_$timestamp.xlsx';
+      final filePath = '$downloadsPath${Platform.pathSeparator}$fileName';
+
+      final file = File(filePath);
+      await file.writeAsBytes(bytes);
+
+      final uri = Uri.file(filePath);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    } catch (error) {
+      throw Exception('Error saving Excel file: $error');
     }
   }
 

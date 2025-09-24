@@ -20,6 +20,7 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
   List<Chemical> _chemicals = [];
   List<Chemical> _filteredChemicals = [];
   bool _isLoading = true;
+  bool _isGeneratingExcel = false;
   String _searchQuery = '';
   String _selectedCategory = 'All';
 
@@ -88,6 +89,11 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
             icon: const Icon(Icons.picture_as_pdf),
             onPressed: _showPdfFilterDialog,
             tooltip: 'Generate PDF Report',
+          ),
+          IconButton(
+            icon: Icon(Icons.table_chart, color: Colors.green),
+            tooltip: 'Generate Excel Order List',
+            onPressed: _isGeneratingExcel ? null : _generateExcelOrderList,
           ),
           if (!isBorrower)
             IconButton(
@@ -404,6 +410,27 @@ class _ChemicalsScreenState extends State<ChemicalsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to generate PDF: $error')),
         );
+      }
+    }
+  }
+
+  Future<void> _generateExcelOrderList() async {
+    try {
+      setState(() => _isGeneratingExcel = true);
+      await ApiService.generateOrderListExcel();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Excel order list generated successfully')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to generate Excel: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingExcel = false);
       }
     }
   }
