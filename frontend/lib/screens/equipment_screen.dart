@@ -100,6 +100,25 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             onPressed: _showEquipmentPdfFilterDialog,
             tooltip: 'Generate Equipment PDF Report',
           ),
+          // Add maintenance report button
+          IconButton(
+            icon: const Icon(Icons.build, color: Colors.orange),
+            tooltip: 'Generate Maintenance Report',
+            onPressed: () async {
+              try {
+                await ApiService.generateEquipmentMaintenanceReport();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text(
+                          'Equipment maintenance report generated successfully')),
+                );
+              } catch (error) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to generate report: $error')),
+                );
+              }
+            },
+          ),
           if (!isBorrower)
             IconButton(
               icon: const Icon(Icons.add),

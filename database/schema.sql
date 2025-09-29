@@ -5,6 +5,14 @@ CREATE TABLE users (
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     role VARCHAR(20) DEFAULT 'borrower' CHECK (role IN ('admin', 'technician', 'borrower')),
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'pending', 'rejected')),
+    phone VARCHAR(20),
+    student_id VARCHAR(50) UNIQUE,
+    institution VARCHAR(200),
+    education_level VARCHAR(50),
+    semester VARCHAR(50),
+    department VARCHAR(100),
+    rejection_reason TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -146,58 +154,12 @@ CREATE INDEX idx_borrowings_dates ON borrowings(borrow_date, return_date);
 CREATE INDEX idx_borrowings_technician ON borrowings(technician_id);
 CREATE INDEX idx_borrowings_admin ON borrowings(admin_id);
 CREATE INDEX idx_borrowings_pending ON borrowings(status) WHERE status = 'pending';
-CREATE INDEX idx_borrowings_overdue ON borrowings(status, return_date) 
-WHERE status = 'approved' AND return_date < CURRENT_DATE;
+-- CREATE INDEX idx_borrowings_overdue ON borrowings(status, return_date)
+-- WHERE status = 'approved' AND return_date < CURRENT_DATE;
 CREATE INDEX idx_lecture_schedules_admin ON lecture_schedules(admin_id);
 CREATE INDEX idx_lecture_schedules_technician ON lecture_schedules(technician_id);
 CREATE INDEX idx_lecture_schedules_date ON lecture_schedules(scheduled_date);
 CREATE INDEX idx_lecture_schedules_status ON lecture_schedules(status);
-
--- Create a function to automatically update the updated_at field
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Create triggers for automatic timestamp updates
-CREATE TRIGGER update_borrowings_updated_at 
-    BEFORE UPDATE ON borrowings 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_lecture_schedules_updated_at
-    BEFORE UPDATE ON lecture_schedules
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
--- Create trigger to update chemicals table when usage is logged
-CREATE OR REPLACE FUNCTION update_chemical_after_usage()
-RETURNS TRIGGER AS $$
-BEGIN
-    UPDATE chemicals
-    SET
-        quantity = NEW.remaining_quantity,
-        last_used_date = NEW.usage_date,
-        total_used = COALESCE(total_used, 0) + NEW.quantity_used,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = NEW.chemical_id;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_update_chemical_after_usage
-    AFTER INSERT ON chemical_usage_logs
-    FOR EACH ROW
-    EXECUTE FUNCTION update_chemical_after_usage();
-
--- Create trigger for chemical_usage_logs updated_at
-CREATE TRIGGER update_chemical_usage_logs_updated_at
-    BEFORE UPDATE ON chemical_usage_logs
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
 
 -- Chat conversations and messages tables for live chat feature
 CREATE TABLE chat_conversations (
@@ -208,7 +170,7 @@ CREATE TABLE chat_conversations (
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'closed', 'archived')),
     title VARCHAR(200),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE chat_messages (
@@ -256,18 +218,6 @@ CREATE TABLE chat_context (
 -- Create indexes for chat context
 CREATE INDEX idx_chat_context_conversation ON chat_context(conversation_id);
 CREATE INDEX idx_chat_context_key ON chat_context(context_key);
-
--- Create trigger for chat context updated_at
-CREATE TRIGGER update_chat_context_updated_at
-    BEFORE UPDATE ON chat_context
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
--- Create trigger for chat conversations updated_at
-CREATE TRIGGER update_chat_conversations_updated_at
-    BEFORE UPDATE ON chat_conversations
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
 
 -- Chatbot audit log table for tracking queries and responses
 CREATE TABLE chatbot_audit_log (

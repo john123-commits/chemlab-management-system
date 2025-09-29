@@ -1382,6 +1382,60 @@ class ApiService {
     }
   }
 
+  // Generate equipment maintenance report Excel
+  static Future<void> generateEquipmentMaintenanceReport() async {
+    final token = await getAuthToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/equipment/generate-maintenance-report'),
+      headers: getHeaders(token),
+    );
+
+    if (response.statusCode == 200) {
+      final bytes = response.bodyBytes;
+      if (bytes.isEmpty) {
+        throw Exception('Received empty Excel file');
+      }
+      await _saveEquipmentExcelToDownloads(bytes);
+    } else {
+      throw Exception('Failed to generate equipment report: ${response.body}');
+    }
+  }
+
+  static Future<void> _saveEquipmentExcelToDownloads(Uint8List bytes) async {
+    try {
+      String downloadsPath;
+
+      if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'];
+        downloadsPath = '$userProfile\\Downloads';
+      } else if (Platform.isMacOS || Platform.isLinux) {
+        final home = Platform.environment['HOME'];
+        downloadsPath = '$home/Downloads';
+      } else {
+        final directory = await getApplicationDocumentsDirectory();
+        downloadsPath = directory.path;
+      }
+
+      final timestamp = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final fileName = 'Equipment_Maintenance_Report_$timestamp.xlsx';
+      final filePath = '$downloadsPath${Platform.pathSeparator}$fileName';
+
+      final file = File(filePath);
+      await file.writeAsBytes(bytes);
+
+      final uri = Uri.file(filePath);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    } catch (error) {
+      throw Exception('Error saving equipment Excel file: $error');
+    }
+  }
+
   // Alert Action Methods
   static Future<void> orderSupplies(
       int chemicalId, int quantity, String notes) async {

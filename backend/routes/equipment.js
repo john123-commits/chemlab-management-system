@@ -72,4 +72,14 @@ router.post('/generate-pdf', authenticateToken, async (req, res) => {
   }
 });
 
+// Generate equipment maintenance report
+router.post('/generate-maintenance-report', authenticateToken, async (req, res) => {
+  try {
+    const ExcelController = require('../controllers/excelController');
+    await ExcelController.generateEquipmentReport(req, res);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
